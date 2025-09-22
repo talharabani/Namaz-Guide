@@ -1,43 +1,89 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
+import SimpleTabBar from '@/components/SimpleTabBar';
+import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
-      }}>
+  // Show loading screen while checking authentication
+  if (isLoading) {
+    return null;
+  }
+
+  // Redirect to auth if not authenticated
+  if (!isAuthenticated) {
+    return <Redirect href="/auth" />;
+  }
+
+      return (
+        <Tabs
+          tabBar={(props) => <SimpleTabBar {...props} />}
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: { display: 'none' }, // Hide default tab bar
+          }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="prayer-times"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Prayer Times',
+        }}
+      />
+      <Tabs.Screen
+        name="qibla"
+        options={{
+          title: 'Qibla',
+        }}
+      />
+      <Tabs.Screen
+        name="duas"
+        options={{
+          title: 'Duas',
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: 'Progress',
+        }}
+      />
+      <Tabs.Screen
+        name="quiz"
+        options={{
+          title: 'Quiz',
+        }}
+      />
+      <Tabs.Screen
+        name="ai-assistant"
+        options={{
+          title: 'AI Help',
+        }}
+      />
+      <Tabs.Screen
+        name="mistakes"
+        options={{
+          title: 'Mistakes',
+        }}
+      />
+      <Tabs.Screen
+        name="learn"
+        options={{
+          title: 'Learn',
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
         }}
       />
     </Tabs>

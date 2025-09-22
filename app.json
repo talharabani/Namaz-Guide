@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "namaz-mobile",
+    "name": "Namaz Mobile",
     "slug": "namaz-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,15 +8,24 @@
     "scheme": "namazmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "sdkVersion": "54.0.0",
+    "projectId": "namaz-mobile-app",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.namaz.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0f172a"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.namaz.mobile"
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +40,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#0f172a"
         }
       ]
     ],

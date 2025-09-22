@@ -1,50 +1,210 @@
-# Welcome to your Expo app 👋
+# Namaz Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A beautiful and comprehensive Islamic prayer companion mobile app built with React Native and Expo.
 
-## Get started
+## Features
 
-1. Install dependencies
+### 🕌 **Core Features**
+- **Prayer Times**: Accurate daily prayer schedules with location-based calculations
+- **Qibla Direction**: Compass-based Qibla finder with real-time direction
+- **Learn Namaz**: Step-by-step prayer learning guide with progress tracking
+- **Duas & Hadith**: Collection of Islamic supplications and Prophet's sayings
+- **Settings**: Comprehensive app customization and preferences
 
+### 📱 **Mobile-Optimized**
+- **Beautiful UI**: Modern glass-morphism design with smooth animations
+- **Dark Theme**: Elegant dark theme optimized for mobile viewing
+- **Responsive Design**: Perfectly adapted for all screen sizes
+- **Touch-Friendly**: Intuitive touch interactions and gestures
+- **Offline Support**: Core features work without internet connection
+
+### 🔧 **Technical Features**
+- **React Native**: Cross-platform mobile development
+- **Expo**: Easy development and deployment
+- **TypeScript**: Type-safe development
+- **Context API**: State management for authentication and settings
+- **AsyncStorage**: Local data persistence
+- **Location Services**: GPS-based prayer times and Qibla direction
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Expo CLI (`npm install -g @expo/cli`)
+- iOS Simulator (for iOS development)
+- Android Studio (for Android development)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd namaz-mobile
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
-
+3. **Start the development server**
    ```bash
-   npx expo start
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+4. **Run on device/simulator**
+   - **iOS**: Press `i` in the terminal or scan QR code with Camera app
+   - **Android**: Press `a` in the terminal or scan QR code with Expo Go app
+   - **Web**: Press `w` in the terminal
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Development Commands
 
 ```bash
-npm run reset-project
+# Start development server
+npm start
+
+# Run on iOS simulator
+npm run ios
+
+# Run on Android emulator
+npm run android
+
+# Run on web
+npm run web
+
+# Build for production
+expo build
+
+# Publish to Expo
+expo publish
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Project Structure
 
-## Learn more
+```
+namaz-mobile/
+├── app/                    # App screens and navigation
+│   ├── (tabs)/            # Tab navigation screens
+│   │   ├── index.tsx      # Home screen
+│   │   ├── prayer-times.tsx
+│   │   ├── qibla.tsx
+│   │   ├── learn.tsx
+│   │   └── settings.tsx
+│   └── _layout.tsx        # Root layout
+├── components/            # Reusable components
+├── contexts/              # React contexts
+│   ├── AuthContext.tsx    # Authentication context
+│   └── SettingsContext.tsx # Settings context
+├── constants/             # App constants
+│   └── Theme.ts          # Theme and styling constants
+├── assets/               # Images, fonts, etc.
+└── package.json
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Features Overview
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 🏠 **Home Screen**
+- Beautiful Bismillah display
+- Real-time clock
+- Quick access to all features
+- User profile integration
 
-## Join the community
+### ⏰ **Prayer Times**
+- Location-based prayer times
+- Current time display
+- Next prayer highlighting
+- Islamic date information
 
-Join our community of developers creating universal apps.
+### 🧭 **Qibla Direction**
+- Real-time compass
+- GPS-based calculations
+- Distance to Kaaba
+- Visual direction indicator
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### 📚 **Learn Namaz**
+- Step-by-step prayer guide
+- Progress tracking
+- Interactive learning
+- Completion badges
+
+### ⚙️ **Settings**
+- Theme customization
+- Notification preferences
+- Accessibility options
+- Data usage controls
+
+## Customization
+
+### Themes
+The app supports multiple themes:
+- **Auto**: Follows system theme
+- **Light**: Light theme
+- **Dark**: Dark theme (default)
+
+### Notifications
+- Prayer time alerts
+- Daily reminders
+- Customizable timing
+
+### Accessibility
+- Large text support
+- High contrast mode
+- Reduced motion
+
+## Building for Production
+
+### iOS
+```bash
+expo build:ios
+```
+
+### Android
+```bash
+expo build:android
+```
+
+### Web
+```bash
+expo build:web
+```
+
+## Deployment
+
+### Expo Go
+1. Publish to Expo: `expo publish`
+2. Share the link with users
+3. Users can open in Expo Go app
+
+### App Stores
+1. Build production app: `expo build:ios` or `expo build:android`
+2. Submit to App Store or Google Play Store
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For support and questions:
+- Create an issue on GitHub
+- Contact the development team
+
+## Acknowledgments
+
+- Islamic prayer times calculation
+- Qibla direction algorithms
+- Beautiful UI/UX design
+- Community contributions
+
+---
+
+**Namaz Mobile** - Your complete Islamic prayer companion 📱🕌
