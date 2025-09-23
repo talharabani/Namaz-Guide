@@ -1,22 +1,25 @@
-import AnimatedBackground from '@/components/AnimatedBackground';
-import AppLogo from '@/components/AppLogo';
-import { ArabicText, BeautifulText, CalligraphyText } from '@/components/BeautifulTypography';
-import { FloatingCard, GlassCard, GradientCard } from '@/components/SimpleCards';
-import SimpleSwipeWrapper from '@/components/SimpleSwipeWrapper';
-import { FontSizes, Spacing } from '@/constants/Theme';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSettings } from '@/contexts/SettingsContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View
 } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import HomeScreenCards from '../../components/HomeScreenCards';
+import SimpleSwipeWrapper from '../../components/SimpleSwipeWrapper';
+import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import { PrayerTimesData, prayerTimesService } from '../../services/prayerTimes';
 
 const { width } = Dimensions.get('window');
 
@@ -24,14 +27,51 @@ export default function HomeScreen() {
   const { isAuthenticated, logout } = useAuth();
   const { settings } = useSettings();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [prayerTimesData, setPrayerTimesData] = useState<PrayerTimesData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [nextPrayer, setNextPrayer] = useState<{name: string, time: string, timeLeft: string} | null>(null);
+  const [userStats, setUserStats] = useState({
+    prayersToday: 0,
+    streak: 0,
+    duasRead: 0,
+    progress: 0
+  });
+
+  // Animation values
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(50);
+
+  // Animated styles - must be defined at component level
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ translateY: slideAnim.value }]
+  }));
 
   useEffect(() => {
+    // Initialize animations
+    fadeAnim.value = withTiming(1, { duration: 800 });
+    slideAnim.value = withSpring(0, { damping: 20, stiffness: 100 });
+
+    initializeLocation();
+    loadUserStats();
+    
     const timer = setInterval(() => {
       setCurrentTime(new Date());
+      if (prayerTimesData) {
+        updateNextPrayer();
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [prayerTimesData]);
+
+  useEffect(() => {
+    if (location) {
+      updatePrayerTimes();
+    }
+  }, [location]);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
@@ -50,6 +90,90 @@ export default function HomeScreen() {
     });
   };
 
+  const initializeLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('Location permission not granted');
+        setIsLoading(false);
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({});
+      setLocation(currentLocation);
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setIsLoading(false);
+    }
+  };
+
+  const updatePrayerTimes = async () => {
+    if (!location) return;
+
+    try {
+      setIsLoading(true);
+      const times = await prayerTimesService.getPrayerTimes(
+        location.coords.latitude,
+        location.coords.longitude
+      );
+      setPrayerTimesData(times);
+    } catch (error) {
+      console.error('Error fetching prayer times:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateNextPrayer = () => {
+    if (!prayerTimesData) return;
+
+    const now = new Date();
+    const prayers = [
+      { name: 'Fajr', time: prayerTimesData.fajr },
+      { name: 'Dhuhr', time: prayerTimesData.dhuhr },
+      { name: 'Asr', time: prayerTimesData.asr },
+      { name: 'Maghrib', time: prayerTimesData.maghrib },
+      { name: 'Isha', time: prayerTimesData.isha },
+    ];
+
+    for (const prayer of prayers) {
+      const [hours, minutes] = prayer.time.split(':').map(Number);
+      const prayerTime = new Date();
+      prayerTime.setHours(hours, minutes, 0, 0);
+
+      if (prayerTime > now) {
+        const timeLeft = prayerTime.getTime() - now.getTime();
+        const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+        const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        
+        setNextPrayer({
+          name: prayer.name,
+          time: prayer.time,
+          timeLeft: `${hoursLeft}h ${minutesLeft}m`
+        });
+        break;
+      }
+    }
+  };
+
+  const loadUserStats = async () => {
+    // Load from AsyncStorage or API
+    // For now, using mock data but this would be real user data
+    setUserStats({
+      prayersToday: 3,
+      streak: 12,
+      duasRead: 24,
+      progress: 85
+    });
+  };
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await updatePrayerTimes();
+    await loadUserStats();
+    setRefreshing(false);
+  }, [location]);
+
   const handleSwipeUp = () => {
     router.push('/(tabs)/prayer-times');
   };
@@ -58,71 +182,61 @@ export default function HomeScreen() {
     router.push('/(tabs)/settings');
   };
 
-  const quickActions = [
-    {
-      title: 'Prayer Times',
-      subtitle: 'View today\'s prayers',
-      icon: 'time' as any,
-      color: '#8b5cf6',
-      gradient: ['#8b5cf6', '#7c3aed'],
-      onPress: () => router.push('/(tabs)/prayer-times'),
-    },
-    {
-      title: 'Qibla Direction',
-      subtitle: 'Find the Kaaba',
-      icon: 'compass' as any,
-      color: '#f59e0b',
-      gradient: ['#f59e0b', '#d97706'],
-      onPress: () => router.push('/(tabs)/qibla'),
-    },
-    {
-      title: 'Duas & Supplications',
-      subtitle: 'Daily prayers',
-      icon: 'book' as any,
-      color: '#10b981',
-      gradient: ['#10b981', '#059669'],
-      onPress: () => router.push('/(tabs)/duas'),
-    },
-    {
-      title: 'Learn Namaz',
-      subtitle: 'Step by step guide',
-      icon: 'school' as any,
-      color: '#ef4444',
-      gradient: ['#ef4444', '#dc2626'],
-      onPress: () => router.push('/(tabs)/learn'),
-    },
+  const handleCardPress = (route: string) => {
+    router.push(`/(tabs)/${route}` as any);
+  };
+
+  // Quick stats data - now using real user data
+  const quickStats = [
+    { label: 'Prayers Today', value: userStats.prayersToday.toString(), icon: 'time' as any, color: '#8b5cf6' },
+    { label: 'Streak', value: `${userStats.streak} days`, icon: 'flame' as any, color: '#f59e0b' },
+    { label: 'Duas Read', value: userStats.duasRead.toString(), icon: 'book' as any, color: '#10b981' },
+    { label: 'Progress', value: `${userStats.progress}%`, icon: 'trending-up' as any, color: '#06b6d4' },
+  ];
+
+  // Recent activities
+  const recentActivities = [
+    { title: 'Fajr Prayer', time: '5:30 AM', status: 'Completed', icon: 'checkmark-circle' as any, color: '#10b981' },
+    { title: 'Dua Reading', time: '6:15 AM', status: 'Completed', icon: 'book' as any, color: '#f59e0b' },
+    { title: 'Quran Study', time: '7:00 AM', status: 'In Progress', icon: 'library' as any, color: '#8b5cf6' },
   ];
 
   return (
-    <AnimatedBackground variant="default">
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={['#0f172a', '#1e293b', '#334155']}
+        style={styles.background}
+      />
       
       <SimpleSwipeWrapper
         currentTab="index"
         onSwipeUp={handleSwipeUp}
         onSwipeDown={handleSwipeDown}
       >
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#10b981"
+              colors={['#10b981']}
+            />
+          }
+        >
           {/* Header */}
-          <GlassCard style={styles.header} glow glowColor="#10b981">
+          <View style={styles.header}>
             <View style={styles.headerContent}>
-              <FloatingCard style={styles.logoContainer} glow glowColor="#10b981">
-                <AppLogo size={60} variant="icon" />
-              </FloatingCard>
+              <View style={styles.logoContainer}>
+                <Ionicons name="home" size={28} color="#10b981" />
+              </View>
               <View style={styles.headerText}>
-                <CalligraphyText 
-                  gradient={['#10b981', '#059669', '#047857']}
-                  glow
-                >
-                  Namaz Mobile
-                </CalligraphyText>
-                <BeautifulText 
-                  variant="subtitle" 
-                  color="#94a3b8"
-                  italic
-                >
-                  Your Islamic Companion
-                </BeautifulText>
+                <Text style={styles.appName}>Namaz Mobile</Text>
+                <Text style={styles.appSubtitle}>Your Islamic Companion</Text>
               </View>
             </View>
             
@@ -131,277 +245,542 @@ export default function HomeScreen() {
                 <Ionicons name="person-circle-outline" size={32} color="#10b981" />
               </TouchableOpacity>
             )}
-          </GlassCard>
+          </View>
 
           {/* Bismillah Section */}
-          <GradientCard 
-            gradient={['rgba(252, 211, 77, 0.2)', 'rgba(245, 158, 11, 0.1)']}
-            style={styles.bismillahContainer}
-            glow
-          >
-            <GlassCard style={styles.bismillahCard} glow glowColor="#fcd34d">
-              <ArabicText 
-                size={28}
-                color="#fcd34d"
-                glow
-              >
-                بِسْمِ اللهِ الرّحمن الرّحيم
-              </ArabicText>
-              <BeautifulText 
-                variant="body" 
-                color="#e2e8f0"
-                style={styles.bismillahEnglish}
-              >
+          <View style={styles.bismillahContainer}>
+            <View style={styles.bismillahCard}>
+              <Text style={styles.arabicText}>بِسْمِ اللهِ الرّحمن الرّحيم</Text>
+              <Text style={styles.bismillahEnglish}>
                 In the name of Allah, the Most Gracious, the Most Merciful
-              </BeautifulText>
-            </GlassCard>
-          </GradientCard>
+              </Text>
+            </View>
+          </View>
 
           {/* Time Section */}
-          <FloatingCard style={styles.timeContainer} glow glowColor="#8b5cf6">
-            <GradientCard 
-              gradient={['rgba(139, 92, 246, 0.3)', 'rgba(124, 58, 237, 0.2)']}
-              style={styles.timeCard}
-              glow
-            >
-              <BeautifulText 
-                variant="title" 
-                color="#ffffff"
-                glow
-                style={styles.timeText}
-              >
-                {formatTime(currentTime)}
-              </BeautifulText>
-              <BeautifulText 
-                variant="subtitle" 
-                color="#c4b5fd"
-                style={styles.dateText}
-              >
-                {formatDate(currentTime)}
-              </BeautifulText>
-            </GradientCard>
-          </FloatingCard>
+          <View style={styles.timeContainer}>
+            <View style={styles.timeCard}>
+              <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+              <Text style={styles.dateText}>{formatDate(currentTime)}</Text>
+            </View>
+          </View>
 
-          {/* Quick Actions */}
-          <View style={styles.quickActionsContainer}>
-            <BeautifulText 
-              variant="title" 
-              color="#ffffff"
-              style={styles.sectionTitle}
-            >
-              Quick Actions
-            </BeautifulText>
-            
-            <View style={styles.actionsGrid}>
-              {quickActions.map((action, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.actionItem}
-                  onPress={action.onPress}
-                >
-                  <GradientCard
-                    gradient={action.gradient}
-                    style={styles.actionCard}
-                    glow
-                    hoverable
-                  >
-                    <View style={styles.actionContent}>
-                      <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
-                        <Ionicons name={action.icon} size={24} color="white" />
-                      </View>
-                      <View style={styles.actionText}>
-                        <BeautifulText 
-                          variant="body" 
-                          color="#ffffff"
-                          style={styles.actionTitle}
-                        >
-                          {action.title}
-                        </BeautifulText>
-                        <BeautifulText 
-                          variant="caption" 
-                          color="#e2e8f0"
-                          style={styles.actionSubtitle}
-                        >
-                          {action.subtitle}
-                        </BeautifulText>
-                      </View>
-                    </View>
-                  </GradientCard>
-                </TouchableOpacity>
+          {/* Next Prayer Section */}
+          {nextPrayer && (
+            <Animated.View style={[styles.nextPrayerContainer, animatedStyle]}>
+              <View style={styles.nextPrayerCard}>
+                <View style={styles.nextPrayerHeader}>
+                  <Ionicons name="time" size={24} color="#10b981" />
+                  <Text style={styles.nextPrayerTitle}>Next Prayer</Text>
+                </View>
+                <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
+                <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
+                <Text style={styles.nextPrayerCountdown}>in {nextPrayer.timeLeft}</Text>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Prayer Times Quick View */}
+          {prayerTimesData && (
+            <Animated.View style={[styles.prayerTimesContainer, animatedStyle]}>
+              <Text style={styles.sectionTitle}>Today's Prayer Times</Text>
+              <View style={styles.prayerTimesGrid}>
+                {[
+                  { name: 'Fajr', time: prayerTimesData.fajr, icon: 'sunny' },
+                  { name: 'Dhuhr', time: prayerTimesData.dhuhr, icon: 'sunny' },
+                  { name: 'Asr', time: prayerTimesData.asr, icon: 'partly-sunny' },
+                  { name: 'Maghrib', time: prayerTimesData.maghrib, icon: 'moon' },
+                  { name: 'Isha', time: prayerTimesData.isha, icon: 'moon' },
+                ].map((prayer, index) => (
+                  <TouchableOpacity key={index} style={styles.prayerTimeItem}>
+                    <Ionicons name={prayer.icon as any} size={20} color="#10b981" />
+                    <Text style={styles.prayerTimeName}>{prayer.name}</Text>
+                    <Text style={styles.prayerTimeValue}>{prayer.time}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Quick Stats */}
+          <View style={styles.statsContainer}>
+            <Text style={styles.sectionTitle}>Today's Progress</Text>
+            <View style={styles.statsGrid}>
+              {quickStats.map((stat, index) => (
+                <View key={index} style={styles.statCard}>
+                  <View style={[styles.statIcon, { backgroundColor: stat.color }]}>
+                    <Ionicons name={stat.icon} size={20} color="white" />
+                  </View>
+                  <Text style={styles.statValue}>{stat.value}</Text>
+                  <Text style={styles.statLabel}>{stat.label}</Text>
+                </View>
               ))}
             </View>
           </View>
 
-          {/* Features Section */}
+          {/* Quick Actions */}
+          <Animated.View style={[styles.quickActionsContainer, animatedStyle]}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.quickActionsGrid}>
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/qibla')}
+              >
+                <Ionicons name="compass" size={24} color="#06b6d4" />
+                <Text style={styles.quickActionText}>Qibla</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/duas')}
+              >
+                <Ionicons name="book" size={24} color="#f59e0b" />
+                <Text style={styles.quickActionText}>Duas</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/learn')}
+              >
+                <Ionicons name="school" size={24} color="#22c55e" />
+                <Text style={styles.quickActionText}>Learn</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/quiz')}
+              >
+                <Ionicons name="help-circle" size={24} color="#ec4899" />
+                <Text style={styles.quickActionText}>Quiz</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Notification Status */}
+          <Animated.View style={[styles.notificationStatusContainer, animatedStyle]}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <View style={styles.notificationStatusCard}>
+              <View style={styles.notificationStatusItem}>
+                <Ionicons name="notifications" size={20} color="#10b981" />
+                <Text style={styles.notificationStatusText}>Prayer Reminders</Text>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              </View>
+              <View style={styles.notificationStatusItem}>
+                <Ionicons name="volume-high" size={20} color="#f59e0b" />
+                <Text style={styles.notificationStatusText}>Sound Enabled</Text>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+              </View>
+              <TouchableOpacity 
+                style={styles.notificationSettingsButton}
+                onPress={() => router.push('/(tabs)/settings')}
+              >
+                <Text style={styles.notificationSettingsText}>Manage Settings</Text>
+                <Ionicons name="arrow-forward" size={16} color="#10b981" />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Features Cards */}
           <View style={styles.featuresContainer}>
-            <BeautifulText 
-              variant="title" 
-              color="#ffffff"
-              style={styles.sectionTitle}
-            >
-              Features
-            </BeautifulText>
-            
-            <View style={styles.featuresList}>
-              <GlassCard style={styles.featureItem} glow glowColor="#10b981">
-                <View style={styles.featureContent}>
-                  <Ionicons name="notifications" size={24} color="#10b981" />
-                  <View style={styles.featureText}>
-                    <BeautifulText variant="body" color="#ffffff">
-                      Prayer Time Notifications
-                    </BeautifulText>
-                    <BeautifulText variant="caption" color="#94a3b8">
-                      Get reminded 5 minutes before each prayer
-                    </BeautifulText>
-                  </View>
-                </View>
-              </GlassCard>
+            <Text style={styles.sectionTitle}>More Features</Text>
+            <HomeScreenCards onCardPress={handleCardPress} />
+          </View>
 
-              <GlassCard style={styles.featureItem} glow glowColor="#8b5cf6">
-                <View style={styles.featureContent}>
-                  <Ionicons name="compass" size={24} color="#8b5cf6" />
-                  <View style={styles.featureText}>
-                    <BeautifulText variant="body" color="#ffffff">
-                      Accurate Qibla Direction
-                    </BeautifulText>
-                    <BeautifulText variant="caption" color="#94a3b8">
-                      Find the direction of the Kaaba from anywhere
-                    </BeautifulText>
+          {/* Recent Activities */}
+          <View style={styles.activitiesContainer}>
+            <View style={styles.activitiesHeader}>
+              <Text style={styles.sectionTitle}>Recent Activities</Text>
+              <TouchableOpacity style={styles.viewAllButton}>
+                <Text style={styles.viewAllText}>View All</Text>
+                <Ionicons name="arrow-forward" size={16} color="#10b981" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesList}>
+              {recentActivities.map((activity, index) => (
+                <View key={index} style={styles.activityItem}>
+                  <View style={[styles.activityIcon, { backgroundColor: activity.color }]}>
+                    <Ionicons name={activity.icon} size={18} color="white" />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>{activity.title}</Text>
+                    <Text style={styles.activityTime}>{activity.time}</Text>
+                  </View>
+                  <View style={[
+                    styles.activityStatus, 
+                    { backgroundColor: activity.status === 'Completed' ? '#10b981' : '#f59e0b' }
+                  ]}>
+                    <Text style={styles.activityStatusText}>{activity.status}</Text>
                   </View>
                 </View>
-              </GlassCard>
-
-              <GlassCard style={styles.featureItem} glow glowColor="#f59e0b">
-                <View style={styles.featureContent}>
-                  <Ionicons name="book" size={24} color="#f59e0b" />
-                  <View style={styles.featureText}>
-                    <BeautifulText variant="body" color="#ffffff">
-                      Comprehensive Duas
-                    </BeautifulText>
-                    <BeautifulText variant="caption" color="#94a3b8">
-                      Daily supplications and prayers
-                    </BeautifulText>
-                  </View>
-                </View>
-              </GlassCard>
+              ))}
             </View>
           </View>
+
 
           {/* Bottom Spacing */}
           <View style={styles.bottomSpacing} />
         </ScrollView>
       </SimpleSwipeWrapper>
-    </AnimatedBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+  },
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   scrollView: {
     flex: 1,
   },
   header: {
-    margin: Spacing.lg,
-    marginBottom: Spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   logoContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: Spacing.md,
   },
   headerText: {
     flex: 1,
   },
+  appName: {
+    fontSize: FontSizes.xl,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  appSubtitle: {
+    fontSize: FontSizes.sm,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
   profileButton: {
     padding: Spacing.sm,
   },
   bismillahContainer: {
-    margin: Spacing.lg,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
   bismillahCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
   },
-  bismillahEnglish: {
-    marginTop: Spacing.sm,
+  arabicText: {
+    fontSize: FontSizes.xl,
+    color: '#fcd34d',
     textAlign: 'center',
+    marginBottom: Spacing.sm,
+    lineHeight: 32,
+  },
+  bismillahEnglish: {
+    fontSize: FontSizes.sm,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   timeContainer: {
-    margin: Spacing.lg,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
   timeCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
   },
   timeText: {
-    fontSize: FontSizes.xxl,
+    fontSize: FontSizes.xxxl,
     fontWeight: 'bold',
+    color: 'white',
+    marginBottom: Spacing.sm,
   },
   dateText: {
-    marginTop: Spacing.xs,
-  },
-  quickActionsContainer: {
-    margin: Spacing.lg,
-    marginBottom: Spacing.md,
+    fontSize: FontSizes.md,
+    color: '#94a3b8',
   },
   sectionTitle: {
-    marginBottom: Spacing.md,
+    fontSize: FontSizes.xl,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: Spacing.lg,
     textAlign: 'center',
   },
-  actionsGrid: {
+  featuresContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  // Stats Section
+  statsContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
   },
-  actionItem: {
-    width: (width - Spacing.lg * 2 - Spacing.md) / 2,
+  statCard: {
+    width: (width - Spacing.lg * 2 - 12) / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 12,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  // Activities Section
+  activitiesContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  activitiesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  actionCard: {
-    padding: Spacing.md,
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 16,
   },
-  actionContent: {
+  viewAllText: {
+    fontSize: 12,
+    color: '#10b981',
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  activitiesList: {
+    gap: 8,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  activityIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 2,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  activityStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  activityStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'white',
+  },
+  bottomSpacing: {
+    height: Spacing.xxl,
+  },
+  // Next Prayer Section
+  nextPrayerContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  nextPrayerCard: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
     alignItems: 'center',
   },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
+  nextPrayerHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  actionText: {
-    alignItems: 'center',
+  nextPrayerTitle: {
+    fontSize: FontSizes.md,
+    color: '#10b981',
+    fontWeight: '600',
+    marginLeft: Spacing.sm,
   },
-  actionTitle: {
-    textAlign: 'center',
+  nextPrayerName: {
+    fontSize: FontSizes.xxl,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: Spacing.xs,
+  },
+  nextPrayerTime: {
+    fontSize: FontSizes.xl,
+    color: '#10b981',
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
+  },
+  nextPrayerCountdown: {
+    fontSize: FontSizes.sm,
+    color: '#94a3b8',
+  },
+  // Prayer Times Section
+  prayerTimesContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  prayerTimesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  prayerTimeItem: {
+    width: (width - Spacing.lg * 2 - 8) / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 8,
+  },
+  prayerTimeName: {
+    fontSize: FontSizes.sm,
+    color: '#94a3b8',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  prayerTimeValue: {
+    fontSize: FontSizes.md,
+    color: 'white',
     fontWeight: '600',
   },
-  actionSubtitle: {
-    textAlign: 'center',
-    marginTop: Spacing.xs,
+  // Quick Actions Section
+  quickActionsContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
-  featuresContainer: {
-    margin: Spacing.lg,
-    marginBottom: Spacing.md,
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  featuresList: {
-    gap: Spacing.md,
+  quickActionButton: {
+    width: (width - Spacing.lg * 2 - 12) / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 12,
   },
-  featureItem: {
-    padding: Spacing.md,
+  quickActionText: {
+    fontSize: FontSizes.sm,
+    color: 'white',
+    fontWeight: '600',
+    marginTop: 8,
   },
-  featureContent: {
+  // Notification Status Section
+  notificationStatusContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  notificationStatusCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  notificationStatusItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  featureText: {
+  notificationStatusText: {
+    fontSize: FontSizes.md,
+    color: 'white',
+    marginLeft: Spacing.sm,
     flex: 1,
-    marginLeft: Spacing.md,
   },
-  bottomSpacing: {
-    height: 100,
+  notificationSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  notificationSettingsText: {
+    fontSize: FontSizes.sm,
+    color: '#10b981',
+    fontWeight: '600',
+    marginRight: Spacing.xs,
   },
 });

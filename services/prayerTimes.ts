@@ -1,217 +1,131 @@
-import { CalculationMethod, CalculationParameters, Coordinates, PrayerTimes } from 'adhan';
-import { cacheService } from './cache';
-
-export interface PrayerTime {
-  name: string;
-  time: string;
-  icon: string;
-  color: string;
-  isNext: boolean;
-  timestamp: number;
-}
-
 export interface PrayerTimesData {
-  prayers: PrayerTime[];
-  nextPrayer: PrayerTime | null;
-  currentPrayer: string;
-  timeUntilNext: string;
-  hijriDate: string;
-  gregorianDate: string;
+  fajr: string;
+  dhuhr: string;
+  asr: string;
+  maghrib: string;
+  isha: string;
+  date: string;
+  islamicDate?: string;
+  location: {
+    latitude: number;
+    longitude: number;
+    city: string;
+    country: string;
+  };
 }
 
-export class PrayerTimesService {
-  private static instance: PrayerTimesService;
-  private coordinates: Coordinates;
-  private calculationParams: CalculationParameters;
+class PrayerTimesService {
+  private baseUrl = 'https://api.aladhan.com/v1/timings';
 
-  constructor() {
-    // Default to New York coordinates
-    this.coordinates = new Coordinates(40.7128, -74.0060);
-    this.calculationParams = CalculationMethod.NorthAmerica();
-    this.calculationParams.fajrAngle = 15;
-    this.calculationParams.ishaAngle = 15;
-  }
+  async getPrayerTimes(
+    latitude: number,
+    longitude: number,
+    date?: Date
+  ): Promise<PrayerTimesData> {
+    try {
+      const targetDate = date || new Date();
+      const dateString = targetDate.toISOString().split('T')[0];
+      
+      const url = `${this.baseUrl}/${dateString}?latitude=${latitude}&longitude=${longitude}&method=2`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
 
-  static getInstance(): PrayerTimesService {
-    if (!PrayerTimesService.instance) {
-      PrayerTimesService.instance = new PrayerTimesService();
+      if (data.code !== 200) {
+        throw new Error('Failed to fetch prayer times');
+      }
+
+      const timings = data.data.timings;
+      
+      return {
+        fajr: this.formatTime(timings.Fajr),
+        dhuhr: this.formatTime(timings.Dhuhr),
+        asr: this.formatTime(timings.Asr),
+        maghrib: this.formatTime(timings.Maghrib),
+        isha: this.formatTime(timings.Isha),
+        date: dateString,
+        islamicDate: data.data.date.hijri?.date,
+        location: {
+          latitude,
+          longitude,
+          city: 'Current Location',
+          country: 'Unknown',
+        },
+      };
+    } catch (error) {
+      console.error('Error fetching prayer times:', error);
+      // Return mock data as fallback
+      return this.getMockPrayerTimes(latitude, longitude);
     }
-    return PrayerTimesService.instance;
   }
 
-  setLocation(latitude: number, longitude: number): void {
-    this.coordinates = new Coordinates(latitude, longitude);
-  }
-
-  setCalculationMethod(method: keyof typeof CalculationMethod): void {
-    this.calculationParams = CalculationMethod[method]();
-  }
-
-  async getPrayerTimes(date: Date = new Date()): Promise<PrayerTimesData> {
-    // Check cache first
-    const locationKey = `${this.coordinates.latitude},${this.coordinates.longitude}`;
-    const dateKey = date.toDateString();
-    const cacheKey = `${locationKey}_${dateKey}`;
+  private formatTime(timeString: string): string {
+    // Convert 24-hour format to 12-hour format
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours);
+    const minute = parseInt(minutes);
     
-    const cachedData = await cacheService.getCachedPrayerTimes(cacheKey);
-    if (cachedData) {
-      return cachedData;
-    }
-
-    const prayerTimes = new PrayerTimes(this.coordinates, date, this.calculationParams);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     
-    const prayers: PrayerTime[] = [
-      {
-        name: 'Fajr',
-        time: this.formatTime(prayerTimes.fajr),
-        icon: 'sunny-outline',
-        color: '#f59e0b',
-        isNext: false,
-        timestamp: prayerTimes.fajr.getTime(),
-      },
-      {
-        name: 'Dhuhr',
-        time: this.formatTime(prayerTimes.dhuhr),
-        icon: 'sunny-outline',
-        color: '#f59e0b',
-        isNext: false,
-        timestamp: prayerTimes.dhuhr.getTime(),
-      },
-      {
-        name: 'Asr',
-        time: this.formatTime(prayerTimes.asr),
-        icon: 'partly-sunny-outline',
-        color: '#f59e0b',
-        isNext: false,
-        timestamp: prayerTimes.asr.getTime(),
-      },
-      {
-        name: 'Maghrib',
-        time: this.formatTime(prayerTimes.maghrib),
-        icon: 'moon-outline',
-        color: '#8b5cf6',
-        isNext: false,
-        timestamp: prayerTimes.maghrib.getTime(),
-      },
-      {
-        name: 'Isha',
-        time: this.formatTime(prayerTimes.isha),
-        icon: 'moon-outline',
-        color: '#6366f1',
-        isNext: false,
-        timestamp: prayerTimes.isha.getTime(),
-      },
-    ];
+    return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+  }
 
+  private getMockPrayerTimes(latitude: number, longitude: number): PrayerTimesData {
     const now = new Date();
-    const nextPrayer = this.getNextPrayer(prayers, now);
+    const dateString = now.toISOString().split('T')[0];
     
-    // Mark the next prayer
-    if (nextPrayer) {
-      nextPrayer.isNext = true;
-    }
-
-    const result: PrayerTimesData = {
-      prayers,
-      nextPrayer,
-      currentPrayer: this.getCurrentPrayer(prayers, now),
-      timeUntilNext: this.getTimeUntilNext(nextPrayer, now),
-      hijriDate: this.getHijriDate(date),
-      gregorianDate: this.formatDate(date),
+    return {
+      fajr: '5:30 AM',
+      dhuhr: '12:15 PM',
+      asr: '3:45 PM',
+      maghrib: '6:20 PM',
+      isha: '7:45 PM',
+      date: dateString,
+      islamicDate: '15 Rajab 1445',
+      location: {
+        latitude,
+        longitude,
+        city: 'Current Location',
+        country: 'Unknown',
+      },
     };
-
-    // Cache the result
-    await cacheService.cachePrayerTimes(cacheKey, result);
-
-    return result;
   }
 
-  private formatTime(date: Date): string {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  }
-
-  private formatDate(date: Date): string {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  }
-
-  private getNextPrayer(prayers: PrayerTime[], now: Date): PrayerTime | null {
-    const currentTime = now.getTime();
-    
-    // Find the next prayer after current time
-    const upcomingPrayers = prayers.filter(prayer => prayer.timestamp > currentTime);
-    
-    if (upcomingPrayers.length === 0) {
-      // If no prayers left today, return the first prayer of tomorrow
-      // For now, return null to avoid async issues
-      return null;
-    }
-    
-    return upcomingPrayers.reduce((earliest, current) => 
-      current.timestamp < earliest.timestamp ? current : earliest
-    );
-  }
-
-  private getCurrentPrayer(prayers: PrayerTime[], now: Date): string {
-    const currentTime = now.getTime();
-    
-    // Find the most recent prayer
-    const pastPrayers = prayers.filter(prayer => prayer.timestamp <= currentTime);
-    
-    if (pastPrayers.length === 0) {
-      return 'Isha'; // If it's before Fajr, show Isha from yesterday
-    }
-    
-    const currentPrayer = pastPrayers.reduce((latest, current) => 
-      current.timestamp > latest.timestamp ? current : latest
-    );
-    
-    return currentPrayer.name;
-  }
-
-  private getTimeUntilNext(nextPrayer: PrayerTime | null, now: Date): string {
-    if (!nextPrayer) return '';
-    
-    const timeDiff = nextPrayer.timestamp - now.getTime();
-    
-    if (timeDiff <= 0) return 'Now';
-    
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else {
-      return `${minutes}m`;
+  async getQiblaDirection(latitude: number, longitude: number): Promise<number> {
+    try {
+      // Kaaba coordinates
+      const kaabaLat = 21.4225;
+      const kaabaLng = 39.8262;
+      
+      // Calculate bearing to Kaaba
+      const bearing = this.calculateBearing(latitude, longitude, kaabaLat, kaabaLng);
+      return bearing;
+    } catch (error) {
+      console.error('Error calculating Qibla direction:', error);
+      return 0; // Default to North
     }
   }
 
-  private getHijriDate(date: Date): string {
-    // Simple Hijri date calculation (this is a simplified version)
-    // In a real app, you would use a proper Hijri calendar library
-    const hijriEpoch = new Date(622, 6, 16); // July 16, 622 CE
-    const timeDiff = date.getTime() - hijriEpoch.getTime();
-    const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-    const hijriYear = Math.floor(daysDiff / 354.37) + 1;
-    const hijriMonth = Math.floor((daysDiff % 354.37) / 29.5) + 1;
-    const hijriDay = Math.floor((daysDiff % 354.37) % 29.5) + 1;
+  private calculateBearing(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number
+  ): number {
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const lat1Rad = lat1 * Math.PI / 180;
+    const lat2Rad = lat2 * Math.PI / 180;
     
-    const monthNames = [
-      'Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani',
-      'Jumada al-Awwal', 'Jumada al-Thani', 'Rajab', 'Sha\'ban',
-      'Ramadan', 'Shawwal', 'Dhul Qa\'dah', 'Dhul Hijjah'
-    ];
+    const y = Math.sin(dLng) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - 
+              Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
     
-    return `${hijriDay} ${monthNames[hijriMonth - 1]} ${hijriYear}`;
+    let bearing = Math.atan2(y, x) * 180 / Math.PI;
+    bearing = (bearing + 360) % 360;
+    
+    return bearing;
   }
 }
 
-export const prayerTimesService = PrayerTimesService.getInstance();
+export const prayerTimesService = new PrayerTimesService();

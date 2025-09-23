@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 
-import SimpleTabBar from '@/components/SimpleTabBar';
+import ProfessionalTabBar from '@/components/ProfessionalTabBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
@@ -21,7 +21,7 @@ export default function TabLayout() {
 
       return (
         <Tabs
-          tabBar={(props) => <SimpleTabBar {...props} />}
+          tabBar={(props) => <ProfessionalTabBar {...props} />}
           screenOptions={{
             headerShown: false,
             tabBarStyle: { display: 'none' }, // Hide default tab bar

@@ -1,43 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  picture?: string;
-  provider: string;
-  createdAt: string;
-  lastLogin: string;
+  avatar?: string;
+  joinDate: Date;
+  preferences: {
+    theme: 'light' | 'dark' | 'auto';
+    notifications: boolean;
+    language: string;
+  };
 }
 
 interface AuthContextType {
   user: User | null;
-  isAuthenticated: boolean;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+const USER_STORAGE_KEY = 'namaz_user';
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -46,11 +38,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUser = async () => {
     try {
-      const userData = await AsyncStorage.getItem('namaz_user');
+      const userData = await AsyncStorage.getItem(USER_STORAGE_KEY);
       if (userData) {
         const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
-        setIsAuthenticated(true);
+        setUser({
+          ...parsedUser,
+          joinDate: new Date(parsedUser.joinDate),
+        });
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -59,107 +53,97 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const saveUser = async (userData: User) => {
     try {
-      setIsLoading(true);
-      // Mock authentication for demo purposes
-      if (email && password && password.length >= 6) {
-        const mockUser: User = {
-          id: 'demo-user-' + Date.now(),
-          email: email,
-          name: email.split('@')[0],
-          picture: undefined,
-          provider: 'email',
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString()
-        };
-
-        await AsyncStorage.setItem('namaz_user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        setIsAuthenticated(true);
-      } else {
-        throw new Error('Please enter a valid email and password (minimum 6 characters)');
-      }
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
     } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+      console.error('Error saving user:', error);
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      setIsLoading(true);
-      // Mock authentication for demo purposes
-      if (email && password && password.length >= 6 && name) {
-        const mockUser: User = {
-          id: 'demo-user-' + Date.now(),
-          email: email,
-          name: name,
-          picture: undefined,
-          provider: 'email',
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString()
-        };
-
-        await AsyncStorage.setItem('namaz_user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        setIsAuthenticated(true);
-      } else {
-        throw new Error('Please enter valid information');
-      }
-    } catch (error) {
-      console.error('Sign up error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      setIsLoading(true);
-      // Mock Google authentication for demo purposes
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock user data
       const mockUser: User = {
-        id: 'google-user-' + Date.now(),
-        email: 'user@gmail.com',
-        name: 'Google User',
-        picture: undefined,
-        provider: 'google.com',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
+        id: '1',
+        name: 'John Doe',
+        email,
+        joinDate: new Date(),
+        preferences: {
+          theme: 'auto',
+          notifications: true,
+          language: 'en',
+        },
       };
 
-      await AsyncStorage.setItem('namaz_user', JSON.stringify(mockUser));
       setUser(mockUser);
-      setIsAuthenticated(true);
+      await saveUser(mockUser);
+      return true;
     } catch (error) {
-      console.error('Google sign in error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+      console.error('Login error:', error);
+      return false;
+    }
+  };
+
+  const register = async (name: string, email: string, password: string): Promise<boolean> => {
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock user data
+      const mockUser: User = {
+        id: '1',
+        name,
+        email,
+        joinDate: new Date(),
+        preferences: {
+          theme: 'auto',
+          notifications: true,
+          language: 'en',
+        },
+      };
+
+      setUser(mockUser);
+      await saveUser(mockUser);
+      return true;
+    } catch (error) {
+      console.error('Registration error:', error);
+      return false;
     }
   };
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('namaz_user');
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
       setUser(null);
-      setIsAuthenticated(false);
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
+  const updateUser = async (updates: Partial<User>) => {
+    if (!user) return;
+    
+    try {
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      await saveUser(updatedUser);
+    } catch (error) {
+      console.error('Update user error:', error);
+    }
+  };
+
   const value: AuthContextType = {
     user,
-    isAuthenticated,
     isLoading,
-    signIn,
-    signUp,
-    signInWithGoogle,
+    isAuthenticated: !!user,
+    login,
+    register,
     logout,
+    updateUser,
   };
 
   return (
@@ -167,4 +151,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

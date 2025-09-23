@@ -1,10 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
-    StyleSheet,
-    Text,
-    TextProps,
-    View,
+  StyleSheet,
+  Text,
+  TextProps,
+  View,
 } from 'react-native';
 import { FontSizes } from '../constants/Theme';
 
@@ -77,7 +77,7 @@ export function BeautifulText({
     getVariantStyles(),
     {
       color,
-      fontStyle: italic ? 'italic' : 'normal',
+      fontStyle: italic ? 'italic' as const : 'normal' as const,
       textShadowColor: shadow ? 'rgba(0, 0, 0, 0.5)' : undefined,
       textShadowOffset: shadow ? { width: 1, height: 1 } : undefined,
       textShadowRadius: shadow ? 3 : undefined,
@@ -88,7 +88,7 @@ export function BeautifulText({
   if (gradient) {
     return (
       <LinearGradient
-        colors={gradient}
+        colors={gradient as [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.gradientContainer}
@@ -136,10 +136,10 @@ export function ArabicText({
     {
       fontSize: size,
       color,
-      textAlign: 'right',
+      textAlign: 'right' as const,
       lineHeight: size * 1.8,
       fontFamily: 'System',
-      fontWeight: '400',
+      fontWeight: '400' as const,
     },
     glow && styles.arabicGlow,
     style,
@@ -170,10 +170,10 @@ export function CalligraphyText({
   const textStyle = [
     {
       fontSize: size,
-      fontWeight: '300',
+      fontWeight: '300' as const,
       letterSpacing: 2,
-      fontStyle: 'italic',
-      textAlign: 'center',
+      fontStyle: 'italic' as const,
+      textAlign: 'center' as const,
     },
     glow && styles.calligraphyGlow,
     style,
@@ -182,7 +182,7 @@ export function CalligraphyText({
   if (gradient) {
     return (
       <LinearGradient
-        colors={gradient}
+        colors={gradient as [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.gradientContainer}

@@ -1,87 +1,70 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+interface LocationData {
+  latitude: number;
+  longitude: number;
+  city: string;
+  country: string;
+}
 
 interface Settings {
-  theme: 'light' | 'dark' | 'auto';
-  language: 'en' | 'ur';
+  location: LocationData | null;
+  prayerMethod: 'Umm al-Qura' | 'Muslim World League' | 'Islamic Society of North America' | 'Egyptian General Authority of Survey';
+  asrMethod: 'Standard' | 'Hanafi';
+  highLatitudeMethod: 'None' | 'Angle Based' | 'One Seventh' | 'Night Interval';
   notifications: {
     enabled: boolean;
-    prayerTimes: boolean;
-    reminders: boolean;
-    advanceMinutes: number;
+    fajr: boolean;
+    dhuhr: boolean;
+    asr: boolean;
+    maghrib: boolean;
+    isha: boolean;
+    reminderMinutes: number;
   };
-  location: {
-    latitude: number;
-    longitude: number;
-    city: string;
-    country: string;
-  };
-  accessibility: {
-    largeText: boolean;
-    highContrast: boolean;
-    reducedMotion: boolean;
-  };
-  dataUsage: {
-    offlineMode: boolean;
-    cacheImages: boolean;
-    syncFrequency: 'low' | 'medium' | 'high';
-  };
+  language: string;
+  theme: 'light' | 'dark' | 'auto';
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
 }
 
 interface SettingsContextType {
   settings: Settings;
-  updateSettings: (newSettings: Partial<Settings>) => Promise<void>;
-  updateNotificationSetting: (key: keyof Settings['notifications'], value: any) => Promise<void>;
-  updateLocation: (location: Partial<Settings['location']>) => Promise<void>;
-  updateTheme: (theme: Settings['theme']) => Promise<void>;
-  updateAccessibility: (accessibility: Partial<Settings['accessibility']>) => Promise<void>;
-  updateDataUsage: (dataUsage: Partial<Settings['dataUsage']>) => Promise<void>;
-  resetToDefaults: () => Promise<void>;
+  isLoading: boolean;
+  updateLocation: (location: Location.LocationObject) => void;
+  updateSettings: (updates: Partial<Settings>) => Promise<void>;
+  requestLocationPermission: () => Promise<boolean>;
+  getCurrentLocation: () => Promise<Location.LocationObject | null>;
 }
-
-const defaultSettings: Settings = {
-  theme: 'auto',
-  language: 'en',
-  notifications: {
-    enabled: true,
-    prayerTimes: true,
-    reminders: true,
-    advanceMinutes: 5,
-  },
-  location: {
-    latitude: 0,
-    longitude: 0,
-    city: '',
-    country: '',
-  },
-  accessibility: {
-    largeText: false,
-    highContrast: false,
-    reducedMotion: false,
-  },
-  dataUsage: {
-    offlineMode: false,
-    cacheImages: true,
-    syncFrequency: 'medium',
-  },
-};
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const useSettings = () => {
-  const context = useContext(SettingsContext);
-  if (context === undefined) {
-    throw new Error('useSettings must be used within a SettingsProvider');
-  }
-  return context;
+const SETTINGS_STORAGE_KEY = 'namaz_settings';
+
+const defaultSettings: Settings = {
+  location: null,
+  prayerMethod: 'Umm al-Qura',
+  asrMethod: 'Standard',
+  highLatitudeMethod: 'None',
+  notifications: {
+    enabled: true,
+    fajr: true,
+    dhuhr: true,
+    asr: true,
+    maghrib: true,
+    isha: true,
+    reminderMinutes: 5,
+  },
+  language: 'en',
+  theme: 'auto',
+  soundEnabled: true,
+  vibrationEnabled: true,
 };
 
-interface SettingsProviderProps {
-  children: ReactNode;
-}
-
-export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) => {
+export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadSettings();
@@ -89,67 +72,76 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
 
   const loadSettings = async () => {
     try {
-      const savedSettings = await AsyncStorage.getItem('namaz_settings');
+      const savedSettings = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
       if (savedSettings) {
         const parsedSettings = JSON.parse(savedSettings);
         setSettings({ ...defaultSettings, ...parsedSettings });
       }
     } catch (error) {
       console.error('Error loading settings:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const saveSettings = async (newSettings: Settings) => {
     try {
-      await AsyncStorage.setItem('namaz_settings', JSON.stringify(newSettings));
-      setSettings(newSettings);
+      await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
     } catch (error) {
       console.error('Error saving settings:', error);
     }
   };
 
-  const updateSettings = async (newSettings: Partial<Settings>) => {
-    const updatedSettings = { ...settings, ...newSettings };
-    await saveSettings(updatedSettings);
+  const updateLocation = (location: Location.LocationObject) => {
+    const locationData: LocationData = {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      city: 'Current Location', // You might want to reverse geocode this
+      country: 'Unknown',
+    };
+
+    const newSettings = { ...settings, location: locationData };
+    setSettings(newSettings);
+    saveSettings(newSettings);
   };
 
-  const updateNotificationSetting = async (key: keyof Settings['notifications'], value: any) => {
-    const updatedNotifications = { ...settings.notifications, [key]: value };
-    await updateSettings({ notifications: updatedNotifications });
+  const updateSettings = async (updates: Partial<Settings>) => {
+    const newSettings = { ...settings, ...updates };
+    setSettings(newSettings);
+    await saveSettings(newSettings);
   };
 
-  const updateLocation = async (location: Partial<Settings['location']>) => {
-    const updatedLocation = { ...settings.location, ...location };
-    await updateSettings({ location: updatedLocation });
+  const requestLocationPermission = async (): Promise<boolean> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      return status === 'granted';
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+      return false;
+    }
   };
 
-  const updateTheme = async (theme: Settings['theme']) => {
-    await updateSettings({ theme });
-  };
+  const getCurrentLocation = async (): Promise<Location.LocationObject | null> => {
+    try {
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) return null;
 
-  const updateAccessibility = async (accessibility: Partial<Settings['accessibility']>) => {
-    const updatedAccessibility = { ...settings.accessibility, ...accessibility };
-    await updateSettings({ accessibility: updatedAccessibility });
-  };
-
-  const updateDataUsage = async (dataUsage: Partial<Settings['dataUsage']>) => {
-    const updatedDataUsage = { ...settings.dataUsage, ...dataUsage };
-    await updateSettings({ dataUsage: updatedDataUsage });
-  };
-
-  const resetToDefaults = async () => {
-    await saveSettings(defaultSettings);
+      const location = await Location.getCurrentPositionAsync({});
+      updateLocation(location);
+      return location;
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      return null;
+    }
   };
 
   const value: SettingsContextType = {
     settings,
-    updateSettings,
-    updateNotificationSetting,
+    isLoading,
     updateLocation,
-    updateTheme,
-    updateAccessibility,
-    updateDataUsage,
-    resetToDefaults,
+    updateSettings,
+    requestLocationPermission,
+    getCurrentLocation,
   };
 
   return (
@@ -157,4 +149,12 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
       {children}
     </SettingsContext.Provider>
   );
-};
+}
+
+export function useSettings() {
+  const context = useContext(SettingsContext);
+  if (context === undefined) {
+    throw new Error('useSettings must be used within a SettingsProvider');
+  }
+  return context;
+}

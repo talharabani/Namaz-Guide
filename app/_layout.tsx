@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { SettingsProvider } from '../contexts/SettingsContext';
+import { ThemeProvider as CustomThemeProvider } from '../contexts/ThemeContext';
 import { notificationService } from '../services/notifications';
 
 export default function RootLayout() {
@@ -50,20 +51,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <SettingsProvider>
-          <AuthProvider>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="auth" options={{ headerShown: false }} />
-              <Stack.Screen name="duas" options={{ title: 'Duas', headerShown: false }} />
-              <Stack.Screen name="hadith" options={{ title: 'Hadith', headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="light" backgroundColor="#0f172a" />
-          </AuthProvider>
-        </SettingsProvider>
-      </ThemeProvider>
+      <CustomThemeProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <SettingsProvider>
+            <AuthProvider>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="duas" options={{ title: 'Duas', headerShown: false }} />
+                <Stack.Screen name="hadith" options={{ title: 'Hadith', headerShown: false }} />
+                <Stack.Screen name="+not-found" />
+              </Stack>
+              <StatusBar style="light" backgroundColor="#0f172a" />
+            </AuthProvider>
+          </SettingsProvider>
+        </ThemeProvider>
+      </CustomThemeProvider>
     </GestureHandlerRootView>
   );
 }

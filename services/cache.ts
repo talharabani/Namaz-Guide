@@ -187,7 +187,7 @@ export class CacheService {
 
   async downloadAndCacheImage(url: string, filename: string): Promise<string | null> {
     try {
-      const cacheDir = FileSystem.cacheDirectory + 'images/';
+      const cacheDir = FileSystem.Paths.document + '/images/';
       
       // Ensure cache directory exists
       const dirInfo = await FileSystem.getInfoAsync(cacheDir);
@@ -218,7 +218,7 @@ export class CacheService {
 
   async getCachedImage(filename: string): Promise<string | null> {
     try {
-      const localUri = FileSystem.cacheDirectory + 'images/' + filename;
+      const localUri = FileSystem.Paths.document + '/images/' + filename;
       const fileInfo = await FileSystem.getInfoAsync(localUri);
       
       if (fileInfo.exists) {
@@ -234,7 +234,7 @@ export class CacheService {
 
   async clearImageCache(): Promise<void> {
     try {
-      const cacheDir = FileSystem.cacheDirectory + 'images/';
+      const cacheDir = FileSystem.Paths.document + '/images/';
       const dirInfo = await FileSystem.getInfoAsync(cacheDir);
       
       if (dirInfo.exists) {
