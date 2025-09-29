@@ -1,15 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
 
@@ -120,6 +121,44 @@ export default function ProgressScreen() {
             <View style={styles.headerText}>
               <Text style={styles.appName}>Prayer Progress</Text>
               <Text style={styles.appSubtitle}>Track your spiritual journey</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Today's Progress */}
+        <View style={styles.todayProgressContainer}>
+          <Text style={styles.sectionTitle}>Today's Progress</Text>
+          <View style={styles.todayStatsGrid}>
+            <View style={styles.todayStatCard}>
+              <View style={[styles.todayStatIcon, { backgroundColor: '#8b5cf6' }]}>
+                <Ionicons name="time" size={20} color="white" />
+              </View>
+              <Text style={styles.todayStatValue}>3</Text>
+              <Text style={styles.todayStatLabel}>Prayers Today</Text>
+            </View>
+            
+            <View style={styles.todayStatCard}>
+              <View style={[styles.todayStatIcon, { backgroundColor: '#f59e0b' }]}>
+                <Ionicons name="flame" size={20} color="white" />
+              </View>
+              <Text style={styles.todayStatValue}>12 days</Text>
+              <Text style={styles.todayStatLabel}>Streak</Text>
+            </View>
+            
+            <View style={styles.todayStatCard}>
+              <View style={[styles.todayStatIcon, { backgroundColor: '#10b981' }]}>
+                <Ionicons name="book" size={20} color="white" />
+              </View>
+              <Text style={styles.todayStatValue}>24</Text>
+              <Text style={styles.todayStatLabel}>Duas Read</Text>
+            </View>
+            
+            <View style={styles.todayStatCard}>
+              <View style={[styles.todayStatIcon, { backgroundColor: '#06b6d4' }]}>
+                <Ionicons name="trending-up" size={20} color="white" />
+              </View>
+              <Text style={styles.todayStatValue}>85%</Text>
+              <Text style={styles.todayStatLabel}>Progress</Text>
             </View>
           </View>
         </View>
@@ -408,6 +447,45 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 2,
   },
+  todayProgressContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  todayStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  todayStatCard: {
+    width: (width - Spacing.lg * 2 - 12) / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 12,
+  },
+  todayStatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  todayStatValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  todayStatLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
   periodContainer: {
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
@@ -647,6 +725,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
 });

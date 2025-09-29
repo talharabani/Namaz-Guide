@@ -1,19 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Clipboard,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
+import { aiService, testAIConnection } from '../../services/aiService';
 
 const { width } = Dimensions.get('window');
 
@@ -23,74 +26,9 @@ interface ChatMessage {
   isUser: boolean;
   timestamp: Date;
   language?: string;
+  isError?: boolean;
+  isRetrying?: boolean;
 }
-
-interface QuickAction {
-  id: string;
-  title: string;
-  icon: string;
-  prompt: string;
-  category: string;
-}
-
-const quickActions: QuickAction[] = [
-  {
-    id: '1',
-    title: 'Prayer Times',
-    icon: 'time-outline',
-    prompt: 'What are the prayer times for today?',
-    category: 'Prayer',
-  },
-  {
-    id: '2',
-    title: 'Qibla Direction',
-    icon: 'compass-outline',
-    prompt: 'How do I find the Qibla direction?',
-    category: 'Prayer',
-  },
-  {
-    id: '3',
-    title: 'Wudu Steps',
-    icon: 'water-outline',
-    prompt: 'Can you explain the steps of Wudu?',
-    category: 'Rituals',
-  },
-  {
-    id: '4',
-    title: 'Prayer Mistakes',
-    icon: 'warning-outline',
-    prompt: 'What are common mistakes in prayer?',
-    category: 'Education',
-  },
-  {
-    id: '5',
-    title: 'Islamic Duas',
-    icon: 'heart-outline',
-    prompt: 'Share some important Islamic duas',
-    category: 'Duas',
-  },
-  {
-    id: '6',
-    title: 'Ramadan Guide',
-    icon: 'moon-outline',
-    prompt: 'Tell me about Ramadan practices',
-    category: 'Special Occasions',
-  },
-  {
-    id: '7',
-    title: 'Hajj Information',
-    icon: 'airplane-outline',
-    prompt: 'Explain the Hajj pilgrimage',
-    category: 'Pilgrimage',
-  },
-  {
-    id: '8',
-    title: 'Islamic Calendar',
-    icon: 'calendar-outline',
-    prompt: 'Tell me about the Islamic calendar',
-    category: 'Calendar',
-  },
-];
 
 const languages = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -105,105 +43,65 @@ export default function AIAssistantScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: 'Assalamu Alaikum! I\'m your AI Islamic assistant. I can help you with prayer times, Islamic knowledge, duas, and answer questions in multiple languages. How can I assist you today?',
+      text: 'Assalamu Alaikum! I am your Islamic AI assistant. How can I help you today?',
       isUser: false,
       timestamp: new Date(),
+      language: 'en',
+    },
+    {
+      id: '2',
+      text: 'What are the five pillars of Islam?',
+      isUser: true,
+      timestamp: new Date(),
+      language: 'en',
+    },
+    {
+      id: '3',
+      text: 'The five pillars of Islam are:\n\n1. Shahada (Declaration of Faith)\n2. Salah (Prayer)\n3. Zakat (Charity)\n4. Sawm (Fasting during Ramadan)\n5. Hajj (Pilgrimage to Mecca)\n\nThese pillars form the foundation of Islamic practice and belief.',
+      isUser: false,
+      timestamp: new Date(),
+      language: 'en',
+    },
+    {
+      id: '4',
+      text: 'Can you tell me about prayer times?',
+      isUser: true,
+      timestamp: new Date(),
+      language: 'en',
+    },
+    {
+      id: '5',
+      text: 'Muslims pray five times a day:\n\n• Fajr (Dawn prayer)\n• Dhuhr (Midday prayer)\n• Asr (Afternoon prayer)\n• Maghrib (Sunset prayer)\n• Isha (Night prayer)\n\nEach prayer has specific times based on the sun\'s position.',
+      isUser: false,
+      timestamp: new Date(),
+      language: 'en',
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [quotaStatus, setQuotaStatus] = useState<{used: number, remaining: number, resetTime?: Date} | null>(null);
+  const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+  const typingAnimation = useRef(new Animated.Value(0)).current;
 
-  const categories = ['All', 'Prayer', 'Rituals', 'Education', 'Duas', 'Special Occasions', 'Pilgrimage', 'Calendar'];
-
-  // Mock AI responses based on keywords
-  const generateAIResponse = (userMessage: string, language: string): string => {
-    const message = userMessage.toLowerCase();
-    
-    // Prayer times
-    if (message.includes('prayer time') || message.includes('namaz time')) {
-      return language === 'ur' 
-        ? 'آپ کی جگہ کے لیے نماز کے اوقات: فجر 5:30 AM، ظہر 12:15 PM، عصر 3:45 PM، مغرب 6:20 PM، عشاء 7:45 PM۔ آپ اپنی جگہ کے لیے درست اوقات چیک کر سکتے ہیں۔'
-        : language === 'ar'
-        ? 'أوقات الصلاة لموقعك: الفجر 5:30 صباحاً، الظهر 12:15 ظهراً، العصر 3:45 عصراً، المغرب 6:20 مساءً، العشاء 7:45 مساءً. يمكنك التحقق من الأوقات الدقيقة لموقعك.'
-        : 'Prayer times for your location: Fajr 5:30 AM, Dhuhr 12:15 PM, Asr 3:45 PM, Maghrib 6:20 PM, Isha 7:45 PM. You can check the exact times for your location.';
-    }
-    
-    // Qibla direction
-    if (message.includes('qibla') || message.includes('direction')) {
+  const generateAIResponse = async (userInput: string, language: string): Promise<string> => {
+    try {
+      const response = await aiService.generateResponse(userInput, language);
+      return response.text;
+    } catch (error) {
+      console.error('AI Response Error:', error);
       return language === 'ur'
-        ? 'قبلہ کی سمت تلاش کرنے کے لیے: 1) کمپاس استعمال کریں 2) موبائل ایپ استعمال کریں 3) سورج کی سمت سے اندازہ لگائیں۔ مکہ مکرمہ کی سمت قبلہ ہے۔'
+        ? 'AI مصروف ہے، براہ کرم دوبارہ کوشش کریں۔'
         : language === 'ar'
-        ? 'للعثور على اتجاه القبلة: 1) استخدم البوصلة 2) استخدم تطبيق الهاتف المحمول 3) قدر الاتجاه من الشمس. اتجاه مكة المكرمة هو القبلة.'
-        : 'To find Qibla direction: 1) Use a compass 2) Use a mobile app 3) Estimate from sun direction. The direction of Mecca is the Qibla.';
+        ? 'الذكاء الاصطناعي مشغول، يرجى المحاولة مرة أخرى.'
+        : 'AI is busy, try again';
     }
-    
-    // Wudu steps
-    if (message.includes('wudu') || message.includes('ablution')) {
-      return language === 'ur'
-        ? 'وضو کے مراحل: 1) نیت کریں 2) ہاتھ دھوئیں 3) منہ دھوئیں 4) ناک صاف کریں 5) چہرہ دھوئیں 6) بازو دھوئیں 7) سر کا مسح کریں 8) پاؤں دھوئیں۔'
-        : language === 'ar'
-        ? 'خطوات الوضوء: 1) النية 2) غسل اليدين 3) غسل الفم 4) تنظيف الأنف 5) غسل الوجه 6) غسل الذراعين 7) مسح الرأس 8) غسل القدمين.'
-        : 'Wudu steps: 1) Make intention 2) Wash hands 3) Rinse mouth 4) Clean nose 5) Wash face 6) Wash arms 7) Wipe head 8) Wash feet.';
-    }
-    
-    // Prayer mistakes
-    if (message.includes('mistake') || message.includes('error')) {
-      return language === 'ur'
-        ? 'نماز میں عام غلطیاں: 1) جلدی میں نماز پڑھنا 2) غلط قبلہ کی طرف منہ کرنا 3) وضو نہ کرنا 4) غلط تلفظ 5) توجہ نہ دینا۔'
-        : language === 'ar'
-        ? 'الأخطاء الشائعة في الصلاة: 1) التسرع في الصلاة 2) التوجه لاتجاه خاطئ 3) عدم الوضوء 4) النطق الخاطئ 5) عدم التركيز.'
-        : 'Common prayer mistakes: 1) Rushing through prayer 2) Facing wrong direction 3) Not performing wudu 4) Incorrect pronunciation 5) Lack of concentration.';
-    }
-    
-    // Duas
-    if (message.includes('dua') || message.includes('supplication')) {
-      return language === 'ur'
-        ? 'اہم دعائیں: "ربنا آتنا فی الدنیا حسنة و فی الآخرة حسنة و قنا عذاب النار" (اے رب! ہمیں دنیا میں بھلائی دے اور آخرت میں بھی بھلائی دے اور ہمیں آگ کے عذاب سے بچا)'
-        : language === 'ar'
-        ? 'الدعوات المهمة: "ربنا آتنا في الدنيا حسنة وفي الآخرة حسنة وقنا عذاب النار"'
-        : 'Important duas: "Rabana atina fid dunya hasanatan wa fil akhirati hasanatan wa qina adhaban nar" (Our Lord, give us good in this world and good in the Hereafter, and protect us from the punishment of the Fire)';
-    }
-    
-    // Ramadan
-    if (message.includes('ramadan') || message.includes('fasting')) {
-      return language === 'ur'
-        ? 'رمضان کی باتیں: 1) روزہ رکھنا 2) تراویح پڑھنا 3) قرآن پڑھنا 4) صدقہ دینا 5) افطار میں جلدی کرنا 6) سحری کھانا۔'
-        : language === 'ar'
-        ? 'أمور رمضان: 1) الصيام 2) صلاة التراويح 3) قراءة القرآن 4) إعطاء الصدقة 5) تعجيل الإفطار 6) تناول السحور.'
-        : 'Ramadan practices: 1) Fasting 2) Taraweeh prayer 3) Reading Quran 4) Giving charity 5) Breaking fast early 6) Eating suhoor.';
-    }
-    
-    // Hajj
-    if (message.includes('hajj') || message.includes('pilgrimage')) {
-      return language === 'ur'
-        ? 'حج کے مراحل: 1) احرام باندھنا 2) طواف کرنا 3) سعی کرنا 4) عرفات میں رکنا 5) مزدلفہ میں رکنا 6) رمی کرنا 7) قربانی کرنا۔'
-        : language === 'ar'
-        ? 'مراحل الحج: 1) الإحرام 2) الطواف 3) السعي 4) الوقوف بعرفة 5) الوقوف بمزدلفة 6) رمي الجمرات 7) الذبح.'
-        : 'Hajj steps: 1) Ihram 2) Tawaf 3) Sa\'i 4) Standing at Arafat 5) Standing at Muzdalifah 6) Stoning 7) Sacrifice.';
-    }
-    
-    // Islamic calendar
-    if (message.includes('calendar') || message.includes('hijri')) {
-      return language === 'ur'
-        ? 'اسلامی کیلنڈر: قمری کیلنڈر ہے جو چاند کے چکر پر مبنی ہے۔ 12 مہینے ہیں: محرم، صفر، ربیع الاول، ربیع الثانی، جمادی الاول، جمادی الثانی، رجب، شعبان، رمضان، شوال، ذی القعدہ، ذی الحجہ۔'
-        : language === 'ar'
-        ? 'التقويم الإسلامي: تقويم قمري يعتمد على دورة القمر. هناك 12 شهراً: محرم، صفر، ربيع الأول، ربيع الثاني، جمادى الأولى، جمادى الثانية، رجب، شعبان، رمضان، شوال، ذو القعدة، ذو الحجة.'
-        : 'Islamic calendar: Lunar calendar based on moon cycles. 12 months: Muharram, Safar, Rabi\' al-awwal, Rabi\' al-thani, Jumada al-awwal, Jumada al-thani, Rajab, Sha\'ban, Ramadan, Shawwal, Dhu al-Qi\'dah, Dhu al-Hijjah.';
-    }
-    
-    // Default response
-    return language === 'ur'
-      ? 'میں آپ کی مدد کرنے کے لیے یہاں ہوں۔ آپ نماز، اسلامی تعلیمات، دعائیں، یا کوئی بھی سوال پوچھ سکتے ہیں۔'
-      : language === 'ar'
-      ? 'أنا هنا لمساعدتك. يمكنك السؤال عن الصلاة، التعاليم الإسلامية، الأدعية، أو أي سؤال آخر.'
-      : 'I\'m here to help you. You can ask about prayer, Islamic teachings, duas, or any other questions.';
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async (retryMessageId?: string) => {
+    if (!inputText.trim() && !retryMessageId) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -215,68 +113,195 @@ export default function AIAssistantScreen() {
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
-    setIsTyping(true);
+    setIsLoading(true);
 
-    // Simulate AI typing delay
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: generateAIResponse(inputText, selectedLanguage),
-        isUser: false,
-        timestamp: new Date(),
-        language: selectedLanguage,
-      };
+    const currentInput = inputText;
+    const typingMessageId = (Date.now() + 1).toString();
+    const typingMessage: ChatMessage = {
+      id: typingMessageId,
+      text: 'AI is thinking...',
+      isUser: false,
+      timestamp: new Date(),
+      language: selectedLanguage,
+    };
+    setMessages(prev => [...prev, typingMessage]);
 
-      setMessages(prev => [...prev, aiResponse]);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(typingAnimation, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(typingAnimation, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    try {
+      const aiResponseText = await generateAIResponse(currentInput, selectedLanguage);
+      
+      setMessages(prev => {
+        const filteredMessages = prev.filter(msg => msg.id !== typingMessageId);
+        const aiResponse: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          text: aiResponseText,
+          isUser: false,
+          timestamp: new Date(),
+          language: selectedLanguage,
+        };
+        return [...filteredMessages, aiResponse];
+      });
+
+      await loadQuotaStatus();
+    } catch (error) {
+      console.error('❌ Error getting AI response:', error);
+      
+      setMessages(prev => {
+        const filteredMessages = prev.filter(msg => msg.id !== typingMessageId);
+        const errorMessage: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          text: selectedLanguage === 'ur'
+            ? 'AI مصروف ہے، براہ کرم دوبارہ کوشش کریں۔'
+            : selectedLanguage === 'ar'
+            ? 'الذكاء الاصطناعي مشغول، يرجى المحاولة مرة أخرى.'
+            : 'AI is busy, try again',
+          isUser: false,
+          timestamp: new Date(),
+          language: selectedLanguage,
+          isError: true,
+        };
+        return [...filteredMessages, errorMessage];
+      });
+    } finally {
       setIsTyping(false);
-    }, 1500);
+      setIsLoading(false);
+      typingAnimation.stopAnimation();
+    }
   };
 
-  const handleQuickAction = (action: QuickAction) => {
-    setInputText(action.prompt);
+  const copyToClipboard = async (text: string) => {
+    try {
+      Clipboard.setString(text);
+      Alert.alert('Copied', 'Message copied to clipboard');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+    }
   };
 
-  const filteredActions = selectedCategory === 'All' 
-    ? quickActions 
-    : quickActions.filter(action => action.category === selectedCategory);
+  const retryMessage = (messageId: string) => {
+    sendMessage(messageId);
+  };
+
+  const clearChat = () => {
+    Alert.alert(
+      'Clear Chat',
+      'Are you sure you want to clear all messages?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: () => setMessages([]) }
+      ]
+    );
+  };
+
+  const testAPIConnection = async () => {
+    try {
+      console.log('🔍 Testing API Connection...');
+      
+      const isWorking = await testAIConnection();
+      
+      if (isWorking) {
+        Alert.alert('✅ Success', 'API connection is working perfectly!');
+      } else {
+        Alert.alert('❌ Error', 'API connection failed. Please check your configuration.');
+      }
+    } catch (error) {
+      console.error('API Test Error:', error);
+      Alert.alert('❌ Error', 'Failed to test API connection.');
+    }
+  };
+
+  const loadQuotaStatus = async () => {
+    try {
+      // This would typically load from your API
+      setQuotaStatus({ used: 5, remaining: 15, resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+    } catch (error) {
+      console.error('Error loading quota status:', error);
+    }
+  };
 
   useEffect(() => {
-    // Scroll to bottom when new message is added
+    loadQuotaStatus();
+  }, []);
+
+  useEffect(() => {
     setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
 
-  return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      
-      <LinearGradient
-        colors={['#0f172a', '#1e293b', '#334155']}
-        style={styles.background}
-      />
+  const renderMessage = ({ item }: { item: ChatMessage }) => (
+    <View style={[
+      styles.messageContainer,
+      item.isUser ? styles.userMessage : styles.aiMessage
+    ]}>
+      {!item.isUser && (
+        <View style={styles.aiAvatar}>
+          <Text style={styles.aiAvatarEmoji}>🤖</Text>
+        </View>
+      )}
+      <View style={[
+        styles.messageBubble,
+        item.isUser ? styles.userBubble : styles.aiBubble,
+        item.isError && styles.errorBubble
+      ]}>
+        <Text style={[
+          styles.messageText,
+          item.isUser ? styles.userMessageText : styles.aiMessageText,
+          item.isError && styles.errorText
+        ]}>
+          {item.text}
+        </Text>
+        <Text style={[
+          styles.messageTime,
+          item.isUser ? styles.userMessageTime : styles.aiMessageTime
+        ]}>
+          {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    </View>
+  );
 
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0D1117" />
+      
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="chatbubble-ellipses" size={28} color="#06b6d4" />
+          <View style={styles.headerLeft}>
+            <Text style={styles.appName}>AI Assistant 🤖</Text>
+            {quotaStatus && (
+              <View style={styles.quotaBadge}>
+                <Ionicons name="flash" size={12} color="#10b981" />
+                <Text style={styles.quotaBadgeText}>{quotaStatus.remaining}</Text>
+              </View>
+            )}
           </View>
-          <View style={styles.headerText}>
-            <Text style={styles.appName}>AI Assistant</Text>
-            <Text style={styles.appSubtitle}>Your Islamic guide</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={clearChat}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
         </View>
         
         {/* Language Selector */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.languageSelector}
-        >
+        <View style={styles.languageSelector}>
           {languages.map((lang) => (
             <TouchableOpacity
               key={lang.code}
@@ -296,193 +321,139 @@ export default function AIAssistantScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.quickActionsContainer}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
-        {/* Category Filter */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryFilter}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category && styles.selectedCategoryButton
-              ]}
-              onPress={() => setSelectedCategory(category)}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === category && styles.selectedCategoryButtonText
-              ]}>
-                {category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Quick Action Buttons */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.quickActionsScroll}
-        >
-          {filteredActions.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction(action)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={action.icon as any} size={24} color="#06b6d4" />
-              <Text style={styles.quickActionText}>{action.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Chat Messages */}
-      <ScrollView 
-        ref={scrollViewRef}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={(item) => item.id}
         style={styles.chatContainer}
+        contentContainerStyle={styles.chatContent}
         showsVerticalScrollIndicator={false}
-      >
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            style={[
-              styles.messageContainer,
-              message.isUser ? styles.userMessage : styles.aiMessage
-            ]}
-          >
-            <View style={[
-              styles.messageBubble,
-              message.isUser ? styles.userBubble : styles.aiBubble
-            ]}>
-              <Text style={[
-                styles.messageText,
-                message.isUser ? styles.userMessageText : styles.aiMessageText
-              ]}>
-                {message.text}
-              </Text>
-              <Text style={[
-                styles.messageTime,
-                message.isUser ? styles.userMessageTime : styles.aiMessageTime
-              ]}>
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-          </View>
-        ))}
-        
-        {isTyping && (
-          <View style={[styles.messageContainer, styles.aiMessage]}>
-            <View style={[styles.messageBubble, styles.aiBubble]}>
-              <View style={styles.typingIndicator}>
-                <View style={styles.typingDot} />
-                <View style={styles.typingDot} />
-                <View style={styles.typingDot} />
-              </View>
-            </View>
-          </View>
-        )}
-      </ScrollView>
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        keyboardShouldPersistTaps="handled"
+      />
 
-      {/* Input Area */}
-      <View style={styles.inputContainer}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask me anything about Islam..."
-            placeholderTextColor="#6b7280"
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={sendMessage}
-            disabled={!inputText.trim()}
-            activeOpacity={0.8}
-          >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={inputText.trim() ? "white" : "#6b7280"} 
+      {/* Message Input Field */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <View style={styles.inputContainer}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              ref={inputRef}
+              style={styles.textInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Type your message..."
+              placeholderTextColor="#6b7280"
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={() => inputText.trim() && sendMessage()}
+              blurOnSubmit={false}
             />
-          </TouchableOpacity>
+            <View style={styles.inputActions}>
+              <TouchableOpacity
+                style={styles.micButton}
+                onPress={() => {/* Handle mic functionality */}}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="mic-outline" size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                onPress={() => sendMessage()}
+                disabled={!inputText.trim() || isLoading}
+                activeOpacity={0.8}
+              >
+                <Ionicons 
+                  name={isLoading ? "hourglass-outline" : "arrow-forward"} 
+                  size={20} 
+                  color="white"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
-  },
-  background: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    backgroundColor: '#0D1117',
   },
   header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+    backgroundColor: '#0D1117',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(16, 185, 129, 0.2)',
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  logoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-    justifyContent: 'center',
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  headerText: {
     flex: 1,
   },
   appName: {
-    fontSize: FontSizes.xl,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#ffffff',
+    marginRight: 12,
   },
-  appSubtitle: {
-    fontSize: FontSizes.sm,
-    color: '#94a3b8',
-    marginTop: 2,
+  quotaBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  quotaBadgeText: {
+    fontSize: 10,
+    color: '#10b981',
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  clearButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
   },
   languageSelector: {
-    marginTop: Spacing.sm,
+    flexDirection: 'row',
+    gap: 12,
   },
   languageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginRight: Spacing.sm,
   },
   selectedLanguageButton: {
     borderColor: '#06b6d4',
@@ -490,98 +461,76 @@ const styles = StyleSheet.create({
   },
   languageFlag: {
     fontSize: 16,
-    marginRight: Spacing.xs,
+    marginRight: 6,
   },
   languageText: {
-    fontSize: FontSizes.sm,
+    fontSize: 12,
     color: '#94a3b8',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   selectedLanguageText: {
     color: '#06b6d4',
   },
-  quickActionsContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: Spacing.sm,
-  },
-  categoryFilter: {
-    marginBottom: Spacing.sm,
-  },
-  categoryButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginRight: Spacing.sm,
-  },
-  selectedCategoryButton: {
-    borderColor: '#06b6d4',
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-  },
-  categoryButtonText: {
-    fontSize: FontSizes.xs,
-    color: '#94a3b8',
-    fontWeight: '600',
-  },
-  selectedCategoryButtonText: {
-    color: '#06b6d4',
-  },
-  quickActionsScroll: {
-    marginTop: Spacing.sm,
-  },
-  quickActionButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginRight: Spacing.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    minWidth: 80,
-  },
-  quickActionText: {
-    fontSize: FontSizes.xs,
-    color: 'white',
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-  },
   chatContainer: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
+    backgroundColor: 'transparent',
+  },
+  chatContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: 120,
   },
   messageContainer: {
-    marginBottom: Spacing.md,
-  },
-  userMessage: {
+    marginVertical: 6,
+    flexDirection: 'row',
     alignItems: 'flex-end',
   },
+  userMessage: {
+    justifyContent: 'flex-end',
+  },
   aiMessage: {
-    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  aiAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  aiAvatarEmoji: {
+    fontSize: 16,
   },
   messageBubble: {
-    maxWidth: '80%',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    maxWidth: '75%',
+    padding: 12,
+    borderRadius: 16,
+    marginVertical: 2,
   },
   userBubble: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: '#16A34A',
     borderBottomRightRadius: 4,
+    marginLeft: 8,
   },
   aiBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#1E2633',
     borderBottomLeftRadius: 4,
+    marginRight: 8,
+  },
+  errorBubble: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: 1,
   },
   messageText: {
-    fontSize: FontSizes.md,
+    fontSize: 15,
     lineHeight: 20,
+    color: 'white',
+    marginBottom: 4,
   },
   userMessageText: {
     color: 'white',
@@ -589,59 +538,85 @@ const styles = StyleSheet.create({
   aiMessageText: {
     color: 'white',
   },
+  errorText: {
+    color: '#ef4444',
+  },
   messageTime: {
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.xs,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'right',
   },
   userMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'right',
   },
   aiMessageTime: {
-    color: '#94a3b8',
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#06b6d4',
-    marginRight: Spacing.xs,
+    textAlign: 'left',
   },
   inputContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    backgroundColor: '#0D1117',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
+    backgroundColor: '#1E2633',
+    borderRadius: 25,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   textInput: {
     flex: 1,
-    fontSize: FontSizes.md,
+    fontSize: 16,
     color: 'white',
     maxHeight: 100,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: 12,
+    lineHeight: 20,
+    fontWeight: '400',
   },
-  sendButton: {
-    backgroundColor: '#06b6d4',
-    borderRadius: BorderRadius.full,
-    width: 40,
-    height: 40,
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    gap: 8,
+  },
+  micButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6b7280',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: Spacing.sm,
+    marginRight: 8,
+  },
+  sendButton: {
+    backgroundColor: '#16A34A',
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#6b7280',
+    shadowColor: '#6b7280',
   },
 });

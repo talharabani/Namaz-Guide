@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export interface CacheItem {
   data: any;
@@ -104,6 +104,30 @@ export class CacheService {
     }
   }
 
+  async getCacheInfo(): Promise<Array<{key: string, size: string}>> {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith(this.cachePrefix));
+      
+      const cacheInfo = [];
+      for (const key of cacheKeys) {
+        const item = await AsyncStorage.getItem(key);
+        if (item) {
+          const size = (item.length * 2 / 1024).toFixed(2); // Convert to KB
+          cacheInfo.push({
+            key: key.replace(this.cachePrefix, ''),
+            size: `${size} KB`
+          });
+        }
+      }
+      
+      return cacheInfo;
+    } catch (error) {
+      console.error('Error getting cache info:', error);
+      return [];
+    }
+  }
+
   async cleanup(): Promise<void> {
     try {
       const keys = await AsyncStorage.getAllKeys();
@@ -187,7 +211,7 @@ export class CacheService {
 
   async downloadAndCacheImage(url: string, filename: string): Promise<string | null> {
     try {
-      const cacheDir = FileSystem.Paths.document + '/images/';
+      const cacheDir = FileSystem.documentDirectory + 'images/';
       
       // Ensure cache directory exists
       const dirInfo = await FileSystem.getInfoAsync(cacheDir);
@@ -218,7 +242,7 @@ export class CacheService {
 
   async getCachedImage(filename: string): Promise<string | null> {
     try {
-      const localUri = FileSystem.Paths.document + '/images/' + filename;
+      const localUri = FileSystem.documentDirectory + 'images/' + filename;
       const fileInfo = await FileSystem.getInfoAsync(localUri);
       
       if (fileInfo.exists) {
@@ -234,7 +258,7 @@ export class CacheService {
 
   async clearImageCache(): Promise<void> {
     try {
-      const cacheDir = FileSystem.Paths.document + '/images/';
+      const cacheDir = FileSystem.documentDirectory + 'images/';
       const dirInfo = await FileSystem.getInfoAsync(cacheDir);
       
       if (dirInfo.exists) {

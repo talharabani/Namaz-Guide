@@ -17,7 +17,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.namaz.mobile"
+      "bundleIdentifier": "com.namaz.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to provide accurate prayer times and Qibla direction.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to provide accurate prayer times and Qibla direction."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +29,11 @@
         "backgroundColor": "#0f172a"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.namaz.mobile"
+      "package": "com.namaz.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",

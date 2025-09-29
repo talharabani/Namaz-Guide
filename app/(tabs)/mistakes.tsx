@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-    Dimensions,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
 
@@ -538,6 +539,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
 });

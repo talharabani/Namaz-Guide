@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dimensions,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -50,58 +51,109 @@ export default function PrayerTimesScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const currentLocation = await Location.getCurrentPositionAsync({});
-        setLocation(currentLocation);
-        
-        // Update settings with current location
-        const reverseGeocode = await Location.reverseGeocodeAsync({
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-        });
-        
-        if (reverseGeocode.length > 0) {
-          const address = reverseGeocode[0];
-          updateLocation({
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-            city: address.city || '',
-            country: address.country || '',
-          });
+        if (currentLocation && currentLocation.coords) {
+          setLocation(currentLocation);
+          
+          // Update settings with current location
+          try {
+            const reverseGeocode = await Location.reverseGeocodeAsync({
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+            });
+            
+            if (reverseGeocode && reverseGeocode.length > 0) {
+              const address = reverseGeocode[0];
+              updateLocation({
+                latitude: currentLocation.coords.latitude,
+                longitude: currentLocation.coords.longitude,
+                city: address?.city || 'Unknown City',
+                country: address?.country || 'Unknown Country',
+              });
+            }
+          } catch (geocodeError) {
+            console.warn('Geocoding failed:', geocodeError);
+            // Set default location info if geocoding fails
+            updateLocation({
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+              city: 'Current Location',
+              country: 'Unknown',
+            });
+          }
+        } else {
+          throw new Error('Invalid location data received');
         }
       } else {
         // Use default location from settings or fallback to New York
         const defaultLocation = {
-          latitude: settings.location.latitude || 40.7128,
-          longitude: settings.location.longitude || -74.0060,
+          latitude: settings?.location?.latitude || 40.7128,
+          longitude: settings?.location?.longitude || -74.0060,
         };
         setLocation({
-          coords: defaultLocation,
+          coords: {
+            latitude: defaultLocation.latitude,
+            longitude: defaultLocation.longitude,
+            altitude: null,
+            accuracy: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
           timestamp: Date.now(),
         } as Location.LocationObject);
+        
+        // Update location info with default values
+        updateLocation({
+          latitude: defaultLocation.latitude,
+          longitude: defaultLocation.longitude,
+          city: settings?.location?.city || 'New York',
+          country: settings?.location?.country || 'USA',
+        });
       }
     } catch (error) {
-      console.error('Error getting location:', error);
+      console.warn('Error getting location:', error);
       // Fallback to default location
       const defaultLocation = {
         latitude: 40.7128,
         longitude: -74.0060,
       };
       setLocation({
-        coords: defaultLocation,
+        coords: {
+          latitude: defaultLocation.latitude,
+          longitude: defaultLocation.longitude,
+          altitude: null,
+          accuracy: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+        },
         timestamp: Date.now(),
       } as Location.LocationObject);
+      
+      // Update location info with fallback values
+      updateLocation({
+        latitude: defaultLocation.latitude,
+        longitude: defaultLocation.longitude,
+        city: 'New York',
+        country: 'USA',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const updatePrayerTimes = async () => {
-    if (location) {
-      prayerTimesService.setLocation(
-        location.coords.latitude,
-        location.coords.longitude
-      );
-      const data = await prayerTimesService.getPrayerTimes(currentTime);
-      setPrayerTimesData(data);
+    if (location && location.coords) {
+      try {
+        const data = await prayerTimesService.getPrayerTimes(
+          location.coords.latitude,
+          location.coords.longitude,
+          currentTime
+        );
+        setPrayerTimesData(data);
+      } catch (error) {
+        console.warn('Error fetching prayer times:', error);
+      }
     }
   };
 
@@ -180,6 +232,28 @@ export default function PrayerTimesScreen() {
           </View>
         </View>
 
+        {/* Today's Prayer Times Quick View */}
+        {prayerTimesData && (
+          <View style={styles.quickPrayerTimesContainer}>
+            <Text style={styles.sectionTitle}>Today's Prayer Times</Text>
+            <View style={styles.quickPrayerTimesGrid}>
+              {[
+                { name: 'Fajr', time: prayerTimesData?.fajr, icon: 'sunny' },
+                { name: 'Dhuhr', time: prayerTimesData?.dhuhr, icon: 'sunny' },
+                { name: 'Asr', time: prayerTimesData?.asr, icon: 'partly-sunny' },
+                { name: 'Maghrib', time: prayerTimesData?.maghrib, icon: 'moon' },
+                { name: 'Isha', time: prayerTimesData?.isha, icon: 'moon' },
+              ].map((prayer, index) => (
+                <View key={index} style={styles.quickPrayerTimeItem}>
+                  <Ionicons name={prayer.icon as any} size={20} color="#10b981" />
+                  <Text style={styles.quickPrayerTimeName}>{prayer.name}</Text>
+                  <Text style={styles.quickPrayerTimeValue}>{prayer.time}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Location Info */}
         <View style={styles.locationContainer}>
           <View style={styles.locationCard}>
@@ -188,13 +262,13 @@ export default function PrayerTimesScreen() {
               <Text style={styles.locationText}>Current Location</Text>
             </View>
             <Text style={styles.locationName}>
-              {settings.location.city && settings.location.country 
+              {settings?.location?.city && settings?.location?.country 
                 ? `${settings.location.city}, ${settings.location.country}`
                 : 'Location not available'
               }
             </Text>
             <Text style={styles.locationCoords}>
-              {location ? 
+              {location?.coords?.latitude && location?.coords?.longitude ? 
                 `${location.coords.latitude.toFixed(4)}° N, ${location.coords.longitude.toFixed(4)}° W` :
                 'Coordinates not available'
               }
@@ -205,39 +279,31 @@ export default function PrayerTimesScreen() {
         {/* Prayer Times List */}
         <View style={styles.prayerContainer}>
           <Text style={styles.sectionTitle}>Today's Prayer Times</Text>
-          {prayerTimesData?.prayers.map((prayer, index) => (
+          {prayerTimesData && [
+            { name: 'Fajr', time: prayerTimesData?.fajr, icon: 'sunny' },
+            { name: 'Dhuhr', time: prayerTimesData?.dhuhr, icon: 'sunny' },
+            { name: 'Asr', time: prayerTimesData?.asr, icon: 'partly-sunny' },
+            { name: 'Maghrib', time: prayerTimesData?.maghrib, icon: 'moon' },
+            { name: 'Isha', time: prayerTimesData?.isha, icon: 'moon' },
+          ].map((prayer, index) => (
             <View key={prayer.name} style={styles.prayerItem}>
-              <View 
-                style={[
-                  styles.prayerCard,
-                  prayer.isNext && styles.nextPrayerCard
-                ]}
-              >
+              <View style={styles.prayerCard}>
                 <View style={styles.prayerContent}>
                   <View style={styles.prayerInfo}>
                     <View style={styles.prayerIconContainer}>
                       <Ionicons 
                         name={prayer.icon as any} 
                         size={24} 
-                        color={prayer.isNext ? '#10b981' : '#94a3b8'} 
+                        color="#94a3b8" 
                       />
                     </View>
                     <View style={styles.prayerDetails}>
-                      <Text style={[
-                        styles.prayerName,
-                        prayer.isNext && styles.nextPrayerNameText
-                      ]}>
+                      <Text style={styles.prayerName}>
                         {prayer.name}
                       </Text>
                       <Text style={styles.prayerTime}>{prayer.time}</Text>
                     </View>
                   </View>
-                  
-                  {prayer.isNext && (
-                    <View style={styles.nextBadge}>
-                      <Text style={styles.nextBadgeText}>Next</Text>
-                    </View>
-                  )}
                 </View>
               </View>
             </View>
@@ -356,6 +422,37 @@ const styles = StyleSheet.create({
   nextPrayerTime: {
     fontSize: FontSizes.md,
     color: '#10b981',
+    fontWeight: '600',
+  },
+  quickPrayerTimesContainer: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  quickPrayerTimesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  quickPrayerTimeItem: {
+    width: (width - Spacing.lg * 2 - 8) / 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 8,
+  },
+  quickPrayerTimeName: {
+    fontSize: FontSizes.sm,
+    color: '#94a3b8',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  quickPrayerTimeValue: {
+    fontSize: FontSizes.md,
+    color: 'white',
     fontWeight: '600',
   },
   locationContainer: {
@@ -482,6 +579,6 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
 });

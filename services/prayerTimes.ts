@@ -1,3 +1,5 @@
+import { LocationData } from './locationService';
+
 export interface PrayerTimesData {
   fajr: string;
   dhuhr: string;
@@ -6,12 +8,13 @@ export interface PrayerTimesData {
   isha: string;
   date: string;
   islamicDate?: string;
-  location: {
-    latitude: number;
-    longitude: number;
-    city: string;
-    country: string;
+  hijriDate?: string;
+  location: LocationData;
+  nextPrayer?: {
+    name: string;
+    time: string;
   };
+  timeUntilNext?: string;
 }
 
 class PrayerTimesService {

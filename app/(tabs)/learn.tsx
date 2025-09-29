@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import {
   Dimensions,
+  Image,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,98 +13,21 @@ import {
   View,
 } from 'react-native';
 import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
+import { PrayerStep, prayerSteps } from '../../data/prayerData';
 
 const { width } = Dimensions.get('window');
 
-interface LearningStep {
-  id: string;
-  title: string;
-  description: string;
-  arabic: string;
-  translation: string;
-  transliteration: string;
-  icon: string;
-  color: string;
-}
-
-const learningSteps: LearningStep[] = [
-  {
-    id: '1',
-    title: 'Niyyah (Intention)',
-    description: 'Make the intention to perform the prayer',
-    arabic: 'نِيَّة',
-    translation: 'Intention',
-    transliteration: 'Niyyah',
-    icon: 'heart-outline',
-    color: '#10b981',
-  },
-  {
-    id: '2',
-    title: 'Takbir',
-    description: 'Raise hands and say Allahu Akbar',
-    arabic: 'اللهُ أَكْبَر',
-    translation: 'Allah is the Greatest',
-    transliteration: 'Allahu Akbar',
-    icon: 'hand-right-outline',
-    color: '#3b82f6',
-  },
-  {
-    id: '3',
-    title: 'Qiyam (Standing)',
-    description: 'Stand and recite Al-Fatiha',
-    arabic: 'بِسْمِ اللهِ الرّحمن الرّحيم',
-    translation: 'In the name of Allah, the Most Gracious, the Most Merciful',
-    transliteration: 'Bismillah ir-Rahman ir-Raheem',
-    icon: 'person-outline',
-    color: '#8b5cf6',
-  },
-  {
-    id: '4',
-    title: 'Ruku (Bowing)',
-    description: 'Bow down and say Subhana Rabbi al-Azeem',
-    arabic: 'سُبْحَانَ رَبِّيَ الْعَظِيم',
-    translation: 'Glory to my Lord, the Great',
-    transliteration: 'Subhana Rabbi al-Azeem',
-    icon: 'arrow-down-outline',
-    color: '#f59e0b',
-  },
-  {
-    id: '5',
-    title: 'Sujood (Prostration)',
-    description: 'Prostrate and say Subhana Rabbi al-A\'la',
-    arabic: 'سُبْحَانَ رَبِّيَ الْأَعْلَى',
-    translation: 'Glory to my Lord, the Most High',
-    transliteration: 'Subhana Rabbi al-A\'la',
-    icon: 'arrow-down-circle-outline',
-    color: '#ef4444',
-  },
-  {
-    id: '6',
-    title: 'Tashahhud',
-    description: 'Sit and recite the testimony of faith',
-    arabic: 'أَشْهَدُ أَنْ لَا إِلَهَ إِلَّا الله',
-    translation: 'I bear witness that there is no god but Allah',
-    transliteration: 'Ashhadu an la ilaha illa Allah',
-    icon: 'book-outline',
-    color: '#06b6d4',
-  },
-  {
-    id: '7',
-    title: 'Salam',
-    description: 'Turn head right and left saying peace',
-    arabic: 'السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ الله',
-    translation: 'Peace be upon you and the mercy of Allah',
-    transliteration: 'As-salamu alaykum wa rahmatullah',
-    icon: 'hand-left-outline',
-    color: '#84cc16',
-  },
-];
+// Using enhanced prayer data from data/prayerData.ts
 
 export default function LearnScreen() {
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
 
-  const handleStepPress = (stepId: string) => {
-    setSelectedStep(selectedStep === stepId ? null : stepId);
+  const handleStepPress = (step: PrayerStep) => {
+    // Navigate to detail screen instead of expanding
+    router.push({
+      pathname: '/prayer-detail',
+      params: { prayerStep: JSON.stringify(step) }
+    });
   };
 
   return (
@@ -136,42 +62,43 @@ export default function LearnScreen() {
         {/* Learning Steps */}
         <View style={styles.stepsContainer}>
           <Text style={styles.sectionTitle}>Prayer Steps</Text>
-          {learningSteps.map((step, index) => (
+          {prayerSteps.map((step, index) => (
             <View key={step.id} style={styles.stepItem}>
               <TouchableOpacity
-                style={[
-                  styles.stepCard,
-                  selectedStep === step.id && styles.selectedStepCard
-                ]}
-                onPress={() => handleStepPress(step.id)}
+                style={styles.stepCard}
+                onPress={() => handleStepPress(step)}
                 activeOpacity={0.8}
               >
-                <View style={styles.stepHeader}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>{index + 1}</Text>
-                  </View>
-                  <View style={styles.stepInfo}>
-                    <Text style={styles.stepTitle}>{step.title}</Text>
-                    <Text style={styles.stepDescription}>{step.description}</Text>
-                  </View>
-                  <View style={[styles.stepIcon, { backgroundColor: step.color }]}>
-                    <Ionicons name={step.icon as any} size={20} color="white" />
+                {/* Image at the top */}
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: step.image }}
+                    style={styles.stepImage}
+                    resizeMode="cover"
+                  />
+                  {/* Play overlay if video exists */}
+                  {step.videoUrl && (
+                    <View style={styles.playOverlay}>
+                      <Ionicons name="play-circle" size={32} color="rgba(255, 255, 255, 0.9)" />
+                    </View>
+                  )}
+                </View>
+
+                {/* Step info below image */}
+                <View style={styles.stepContent}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.stepInfo}>
+                      <Text style={styles.stepTitle}>{step.title}</Text>
+                      <Text style={styles.stepDescription}>{step.description}</Text>
+                    </View>
+                    <View style={[styles.stepIcon, { backgroundColor: step.color }]}>
+                      <Ionicons name={step.icon as any} size={20} color="white" />
+                    </View>
                   </View>
                 </View>
-                
-                {selectedStep === step.id && (
-                  <View style={styles.stepDetails}>
-                    <View style={styles.arabicContainer}>
-                      <Text style={styles.arabicText}>{step.arabic}</Text>
-                    </View>
-                    <View style={styles.translationContainer}>
-                      <Text style={styles.translationText}>{step.translation}</Text>
-                    </View>
-                    <View style={styles.transliterationContainer}>
-                      <Text style={styles.transliterationText}>{step.transliteration}</Text>
-                    </View>
-                  </View>
-                )}
               </TouchableOpacity>
             </View>
           ))}
@@ -290,14 +217,37 @@ const styles = StyleSheet.create({
   },
   stepCard: {
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  selectedStepCard: {
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  imageContainer: {
+    position: 'relative',
+    height: 180,
+    width: '100%',
+  },
+  stepImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepContent: {
+    padding: Spacing.lg,
   },
   stepHeader: {
     flexDirection: 'row',
@@ -337,39 +287,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepDetails: {
-    marginTop: Spacing.lg,
-    paddingTop: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  arabicContainer: {
-    marginBottom: Spacing.md,
-  },
-  arabicText: {
-    fontSize: FontSizes.xl,
-    color: '#10b981',
-    textAlign: 'center',
-    lineHeight: 32,
-  },
-  translationContainer: {
-    marginBottom: Spacing.sm,
-  },
-  translationText: {
-    fontSize: FontSizes.md,
-    color: 'white',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  transliterationContainer: {
-    marginBottom: Spacing.sm,
-  },
-  transliterationText: {
-    fontSize: FontSizes.sm,
-    color: '#94a3b8',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
   tipsContainer: {
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
@@ -399,6 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
 });

@@ -118,8 +118,8 @@ export default function ProfessionalTabBar({ state, descriptors, navigation }: B
           ]}>
             <Ionicons 
               name={isActive ? tab.activeIcon : tab.icon} 
-              size={isHomeTab ? 28 : 24} 
-              color={isActive ? 'white' : '#94a3b8'}
+              size={isHomeTab ? 16 : 14} 
+              color={isActive ? (isHomeTab ? '#10b981' : 'white') : '#94a3b8'}
             />
           </View>
           
@@ -161,10 +161,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+    backgroundColor: '#0f172a',
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    paddingTop: 12,
-    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    zIndex: 1000,
+    elevation: 1000,
   },
   tabBar: {
     flexDirection: 'row',
@@ -175,60 +177,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    justifyContent: 'space-evenly',
+    justifyContent: 'space-around',
   },
   tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minHeight: 60,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    minHeight: 42,
+    flex: 1,
   },
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    marginBottom: 4,
+    marginBottom: 3,
+    borderRadius: 12,
   },
   iconContainerActive: {
-    backgroundColor: '#10b981',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '500',
     color: '#94a3b8',
     textAlign: 'center',
+    lineHeight: 12,
   },
   tabLabelActive: {
-    color: '#ffffff',
+    color: '#10b981',
     fontWeight: '600',
   },
-  // Home tab specific styles
+  // Home tab specific styles - larger and centered
   homeTabButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    marginHorizontal: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    minHeight: 42,
+    flex: 1,
   },
   homeTabContent: {
-    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   homeIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginBottom: 6,
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginBottom: 3,
+    borderRadius: 13,
   },
   homeTabLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#10b981',
+    textAlign: 'center',
+    lineHeight: 12,
   },
 });

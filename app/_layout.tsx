@@ -22,14 +22,18 @@ export default function RootLayout() {
   React.useEffect(() => {
     const initializeNotifications = async () => {
       try {
-        // Only initialize notifications if not in Expo Go (to avoid warnings)
-        if (process.env.EXPO_OS !== 'web') {
-          await notificationService.registerForPushNotificationsAsync();
-          await notificationService.schedulePrayerTimeNotifications();
-          await notificationService.scheduleReminderNotifications();
+        // Only initialize notifications if not in web environment
+        if (process.env.EXPO_OS !== 'web' && notificationService) {
+          // Check if notification service methods exist before calling them
+          if (typeof notificationService.scheduleAllPrayerReminders === 'function') {
+            await notificationService.scheduleAllPrayerReminders();
+          }
+          if (typeof notificationService.scheduleDailyReminders === 'function') {
+            await notificationService.scheduleDailyReminders();
+          }
         }
       } catch (error) {
-        console.error('Error initializing notifications:', error);
+        console.warn('Notifications not available:', error.message);
         // Don't crash the app if notifications fail
       }
     };

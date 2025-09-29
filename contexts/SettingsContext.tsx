@@ -32,7 +32,7 @@ interface Settings {
 interface SettingsContextType {
   settings: Settings;
   isLoading: boolean;
-  updateLocation: (location: Location.LocationObject) => void;
+  updateLocation: (location: Location.LocationObject | LocationData) => void;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
   requestLocationPermission: () => Promise<boolean>;
   getCurrentLocation: () => Promise<Location.LocationObject | null>;
@@ -92,13 +92,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateLocation = (location: Location.LocationObject) => {
-    const locationData: LocationData = {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      city: 'Current Location', // You might want to reverse geocode this
-      country: 'Unknown',
-    };
+  const updateLocation = (location: Location.LocationObject | LocationData) => {
+    let locationData: LocationData;
+    
+    if ('coords' in location) {
+      // It's a Location.LocationObject
+      locationData = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        city: 'Current Location', // You might want to reverse geocode this
+        country: 'Unknown',
+      };
+    } else {
+      // It's already a LocationData object
+      locationData = location;
+    }
 
     const newSettings = { ...settings, location: locationData };
     setSettings(newSettings);

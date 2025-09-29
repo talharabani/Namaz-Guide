@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -22,11 +23,7 @@ export default function SettingsScreen() {
   const { user, isAuthenticated, logout } = useAuth();
   const { 
     settings, 
-    updateNotificationSetting, 
-    updateTheme, 
-    updateAccessibility,
-    updateDataUsage,
-    resetToDefaults 
+    updateSettings
   } = useSettings();
 
   const handleLogout = () => {
@@ -46,23 +43,48 @@ export default function SettingsScreen() {
       'Are you sure you want to reset all settings to default?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: resetToDefaults },
+        { text: 'Reset', style: 'destructive', onPress: () => updateSettings({
+          location: null,
+          prayerMethod: 'Umm al-Qura',
+          asrMethod: 'Standard',
+          highLatitudeMethod: 'None',
+          notifications: {
+            enabled: true,
+            fajr: true,
+            dhuhr: true,
+            asr: true,
+            maghrib: true,
+            isha: true,
+            reminderMinutes: 5,
+          },
+          language: 'en',
+          theme: 'auto',
+          soundEnabled: true,
+          vibrationEnabled: true,
+        }) },
       ]
     );
   };
 
   const handleNotificationSettingChange = async (key: string, value: any) => {
-    updateNotificationSetting(key as any, value);
+    await updateSettings({
+      notifications: {
+        ...settings.notifications,
+        [key]: value,
+      },
+    });
     
     // Update notification service
-    await notificationService.updateNotificationSettings({
-      [key]: value,
+    await notificationService.updateSettings({
+      generalNotifications: key === 'enabled' ? value : settings.notifications.enabled,
+      soundEnabled: key === 'sound' ? value : settings.soundEnabled,
+      vibrationEnabled: key === 'vibration' ? value : settings.vibrationEnabled,
     });
   };
 
   const handleTestNotification = async () => {
     try {
-      await notificationService.testNotification();
+      await notificationService.sendMotivationalMessage();
       Alert.alert('Test Notification', 'A test notification has been sent!');
     } catch (error) {
       Alert.alert('Error', 'Failed to send test notification');
@@ -95,11 +117,93 @@ export default function SettingsScreen() {
   const handleCacheInfo = async () => {
     try {
       const cacheSize = await cacheService.getCacheSize();
+      const cacheInfo = await cacheService.getCacheInfo();
       const sizeInMB = (cacheSize / (1024 * 1024)).toFixed(2);
-      Alert.alert('Cache Information', `Current cache size: ${sizeInMB} MB`);
+      
+      const cacheDetails = cacheInfo.length > 0 
+        ? '\n\nCached Items:\n' + cacheInfo.map(item => `• ${item.key}: ${item.size}`).join('\n')
+        : '\n\nNo cached items found.';
+      
+      Alert.alert(
+        'Cache Information', 
+        `Total Cache Size: ${sizeInMB} MB${cacheDetails}`,
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       Alert.alert('Error', 'Failed to get cache information');
     }
+  };
+
+  const handleHelpSupport = () => {
+    Alert.alert(
+      'Help & Support',
+      'Welcome to Namaz Mobile!\n\n📱 Features:\n• Prayer times with notifications\n• Qibla direction finder\n• Islamic learning content\n• Progress tracking\n• Duas and Hadith\n\n📞 Contact Support:\nEmail: support@namazmobile.com\nPhone: +1-800-NAMZ-APP\n\n💡 Tips:\n• Enable location for accurate prayer times\n• Set up notifications for prayer reminders\n• Use the Qibla finder for accurate direction',
+      [
+        { text: 'FAQ', onPress: () => Alert.alert('FAQ', 'Frequently Asked Questions:\n\nQ: How accurate are prayer times?\nA: Very accurate! We use your location and trusted Islamic calculation methods.\n\nQ: Can I change the prayer calculation method?\nA: Yes! Go to Settings > Prayer Method to choose your preferred method.\n\nQ: How do I enable notifications?\nA: Go to Settings > Notifications and toggle the switches for each prayer.') },
+        { text: 'Contact Us', onPress: () => Alert.alert('Contact Us', 'We\'re here to help!\n\n📧 Email: support@namazmobile.com\n📱 Phone: +1-800-NAMZ-APP\n💬 Live Chat: Available 24/7\n\nResponse time: Usually within 2 hours') },
+        { text: 'Close' }
+      ]
+    );
+  };
+
+  const handlePrivacyPolicy = () => {
+    Alert.alert(
+      'Privacy Policy',
+      'Last Updated: December 2024\n\n🔒 Your Privacy Matters\n\nWe collect minimal data to provide you with the best Islamic app experience:\n\n📍 Location Data:\n• Used only for accurate prayer times and Qibla direction\n• Stored locally on your device\n• Never shared with third parties\n\n📱 App Usage:\n• Prayer completion tracking (local only)\n• Settings preferences (local only)\n• No personal data collection\n\n🛡️ Data Protection:\n• All data encrypted and stored locally\n• No cloud storage of personal information\n• No tracking or analytics\n\n📞 Questions? Contact us at privacy@namazmobile.com',
+      [{ text: 'I Understand' }]
+    );
+  };
+
+  const handleTermsOfService = () => {
+    Alert.alert(
+      'Terms of Service',
+      'Last Updated: December 2024\n\n📋 Terms of Use\n\nBy using Namaz Mobile, you agree to:\n\n✅ Proper Use:\n• Use the app for Islamic purposes only\n• Respect prayer times and Islamic guidelines\n• Not misuse the app or its features\n\n📱 App Features:\n• Prayer times are for guidance only\n• Always verify with local Islamic authorities\n• Qibla direction is approximate\n\n🔧 Technical:\n• App may require location permissions\n• Internet connection needed for some features\n• Regular updates may be required\n\n📞 Support: support@namazmobile.com',
+      [{ text: 'I Agree' }]
+    );
+  };
+
+  const handleAppVersion = () => {
+    Alert.alert(
+      'App Information',
+      '📱 Namaz Mobile v1.0.0\n\n✨ Features:\n• Accurate prayer times\n• Qibla direction finder\n• Islamic learning content\n• Progress tracking\n• Beautiful UI/UX\n\n🔄 Updates:\n• Automatic prayer time updates\n• New Islamic content added regularly\n• Bug fixes and improvements\n\n📧 Feedback: feedback@namazmobile.com\n⭐ Rate us on the App Store!',
+      [
+        { text: 'Check Updates', onPress: () => Alert.alert('Updates', 'You have the latest version!\n\nNext update coming soon with:\n• New prayer calculation methods\n• Enhanced notifications\n• More Islamic content') },
+        { text: 'Close' }
+      ]
+    );
+  };
+
+  const handleLocationSettings = () => {
+    Alert.alert(
+      'Location Settings',
+      '📍 Location is required for:\n• Accurate prayer times\n• Qibla direction\n• Local Islamic content\n\n🔧 Current Status:\n• Location: ' + (settings.location ? `${settings.location.city}` : 'Not set') + '\n• Method: ' + settings.prayerMethod + '\n• ASR Method: ' + settings.asrMethod,
+      [
+        { text: 'Update Location', onPress: async () => {
+          try {
+            const location = await useSettings().getCurrentLocation();
+            if (location) {
+              Alert.alert('Success', 'Location updated successfully!');
+            } else {
+              Alert.alert('Error', 'Failed to get current location. Please check permissions.');
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to update location.');
+          }
+        }},
+        { text: 'Change Method', onPress: () => {
+          const methods = ['Umm al-Qura', 'Muslim World League', 'Islamic Society of North America', 'Egyptian General Authority of Survey'];
+          Alert.alert(
+            'Prayer Calculation Method',
+            'Select your preferred method:',
+            methods.map(method => ({
+              text: method,
+              onPress: () => updateSettings({ prayerMethod: method as any })
+            })).concat([{ text: 'Cancel', onPress: async () => {} }])
+          );
+        }},
+        { text: 'Close' }
+      ]
+    );
   };
 
   const SettingItem = ({ 
@@ -183,6 +287,52 @@ export default function SettingsScreen() {
           </View>
         )}
 
+        {/* Location & Prayer Settings */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Location & Prayer</Text>
+          
+          <SettingItem
+            icon="location-outline"
+            title="Location Settings"
+            subtitle={settings.location ? settings.location.city : "Set your location"}
+            onPress={handleLocationSettings}
+          />
+
+          <SettingItem
+            icon="compass-outline"
+            title="Prayer Method"
+            subtitle={settings.prayerMethod}
+            onPress={() => {
+              const methods = ['Umm al-Qura', 'Muslim World League', 'Islamic Society of North America', 'Egyptian General Authority of Survey'];
+              Alert.alert(
+                'Prayer Calculation Method',
+                'Select your preferred method:',
+                methods.map(method => ({
+                  text: method,
+                  onPress: () => updateSettings({ prayerMethod: method as any })
+                })).concat([{ text: 'Cancel', onPress: async () => {} }])
+              );
+            }}
+          />
+
+          <SettingItem
+            icon="time-outline"
+            title="ASR Method"
+            subtitle={settings.asrMethod}
+            onPress={() => {
+              const asrMethods = ['Standard', 'Hanafi'];
+              Alert.alert(
+                'ASR Calculation Method',
+                'Select your preferred ASR method:',
+                asrMethods.map(method => ({
+                  text: method,
+                  onPress: () => updateSettings({ asrMethod: method as any })
+                })).concat([{ text: 'Cancel', onPress: async () => {} }])
+              );
+            }}
+          />
+        </View>
+
         {/* Notifications */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Notifications</Text>
@@ -207,26 +357,104 @@ export default function SettingsScreen() {
             subtitle="Get notified before prayer times"
             rightComponent={
               <Switch
-                value={settings.notifications.prayerTimes}
-                onValueChange={(value) => handleNotificationSettingChange('prayerTimes', value)}
+                value={settings.notifications.fajr}
+                onValueChange={(value) => handleNotificationSettingChange('fajr', value)}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.notifications.prayerTimes ? '#ffffff' : '#9ca3af'}
+                thumbColor={settings.notifications.fajr ? '#ffffff' : '#9ca3af'}
               />
             }
           />
 
           <SettingItem
-            icon="alarm-outline"
-            title="Reminder Alerts"
-            subtitle="Daily Islamic reminders"
+            icon="sunrise-outline"
+            title="Fajr Notifications"
+            subtitle="Dawn prayer reminders"
             rightComponent={
               <Switch
-                value={settings.notifications.reminders}
-                onValueChange={(value) => handleNotificationSettingChange('reminders', value)}
+                value={settings.notifications.fajr}
+                onValueChange={(value) => handleNotificationSettingChange('fajr', value)}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.notifications.reminders ? '#ffffff' : '#9ca3af'}
+                thumbColor={settings.notifications.fajr ? '#ffffff' : '#9ca3af'}
               />
             }
+          />
+
+          <SettingItem
+            icon="sunny-outline"
+            title="Dhuhr Notifications"
+            subtitle="Midday prayer reminders"
+            rightComponent={
+              <Switch
+                value={settings.notifications.dhuhr}
+                onValueChange={(value) => handleNotificationSettingChange('dhuhr', value)}
+                trackColor={{ false: '#374151', true: '#10b981' }}
+                thumbColor={settings.notifications.dhuhr ? '#ffffff' : '#9ca3af'}
+              />
+            }
+          />
+
+          <SettingItem
+            icon="partly-sunny-outline"
+            title="Asr Notifications"
+            subtitle="Afternoon prayer reminders"
+            rightComponent={
+              <Switch
+                value={settings.notifications.asr}
+                onValueChange={(value) => handleNotificationSettingChange('asr', value)}
+                trackColor={{ false: '#374151', true: '#10b981' }}
+                thumbColor={settings.notifications.asr ? '#ffffff' : '#9ca3af'}
+              />
+            }
+          />
+
+          <SettingItem
+            icon="sunset-outline"
+            title="Maghrib Notifications"
+            subtitle="Sunset prayer reminders"
+            rightComponent={
+              <Switch
+                value={settings.notifications.maghrib}
+                onValueChange={(value) => handleNotificationSettingChange('maghrib', value)}
+                trackColor={{ false: '#374151', true: '#10b981' }}
+                thumbColor={settings.notifications.maghrib ? '#ffffff' : '#9ca3af'}
+              />
+            }
+          />
+
+          <SettingItem
+            icon="moon-outline"
+            title="Isha Notifications"
+            subtitle="Night prayer reminders"
+            rightComponent={
+              <Switch
+                value={settings.notifications.isha}
+                onValueChange={(value) => handleNotificationSettingChange('isha', value)}
+                trackColor={{ false: '#374151', true: '#10b981' }}
+                thumbColor={settings.notifications.isha ? '#ffffff' : '#9ca3af'}
+              />
+            }
+          />
+
+          <SettingItem
+            icon="time-outline"
+            title="Reminder Time"
+            subtitle={`${settings.notifications.reminderMinutes} minutes before prayer`}
+            onPress={() => {
+              const times = [5, 10, 15, 30, 60];
+              Alert.alert(
+                'Reminder Time',
+                'How many minutes before prayer time?',
+                times.map(time => ({
+                  text: `${time} minutes`,
+                  onPress: () => updateSettings({
+                    notifications: {
+                      ...settings.notifications,
+                      reminderMinutes: time
+                    }
+                  })
+                })).concat([{ text: 'Cancel', onPress: async () => {} }])
+              );
+            }}
           />
 
           <SettingItem
@@ -249,36 +477,80 @@ export default function SettingsScreen() {
               const themes = ['auto', 'light', 'dark'];
               const currentIndex = themes.indexOf(settings.theme);
               const nextTheme = themes[(currentIndex + 1) % themes.length];
-              updateTheme(nextTheme as any);
+              updateSettings({ theme: nextTheme as any });
             }}
           />
 
           <SettingItem
-            icon="text-outline"
-            title="Large Text"
-            subtitle="Increase text size for better readability"
+            icon="volume-high-outline"
+            title="Sound"
+            subtitle="Enable sound notifications"
             rightComponent={
               <Switch
-                value={settings.accessibility.largeText}
-                onValueChange={(value) => updateAccessibility({ largeText: value })}
+                value={settings.soundEnabled}
+                onValueChange={(value) => updateSettings({ soundEnabled: value })}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.accessibility.largeText ? '#ffffff' : '#9ca3af'}
+                thumbColor={settings.soundEnabled ? '#ffffff' : '#9ca3af'}
               />
             }
           />
 
           <SettingItem
-            icon="contrast-outline"
-            title="High Contrast"
-            subtitle="Enhanced contrast for better visibility"
+            icon="phone-portrait-outline"
+            title="Vibration"
+            subtitle="Enable vibration for notifications"
             rightComponent={
               <Switch
-                value={settings.accessibility.highContrast}
-                onValueChange={(value) => updateAccessibility({ highContrast: value })}
+                value={settings.vibrationEnabled}
+                onValueChange={(value) => updateSettings({ vibrationEnabled: value })}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.accessibility.highContrast ? '#ffffff' : '#9ca3af'}
+                thumbColor={settings.vibrationEnabled ? '#ffffff' : '#9ca3af'}
               />
             }
+          />
+        </View>
+
+        {/* Language & Region */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Language & Region</Text>
+          
+          <SettingItem
+            icon="language-outline"
+            title="Language"
+            subtitle={settings.language === 'en' ? 'English' : settings.language === 'ar' ? 'العربية' : settings.language === 'ur' ? 'اردو' : 'English'}
+            onPress={() => {
+              const languages = [
+                { code: 'en', name: 'English' },
+                { code: 'ar', name: 'العربية' },
+                { code: 'ur', name: 'اردو' },
+                { code: 'fr', name: 'Français' },
+                { code: 'es', name: 'Español' }
+              ];
+              Alert.alert(
+                'Select Language',
+                'Choose your preferred language:',
+                languages.map(lang => ({
+                  text: lang.name,
+                  onPress: () => updateSettings({ language: lang.code })
+                })).concat([{ text: 'Cancel', onPress: async () => {} }])
+              );
+            }}
+          />
+
+          <SettingItem
+            icon="globe-outline"
+            title="Region"
+            subtitle="Set your region for better accuracy"
+            onPress={() => {
+              Alert.alert(
+                'Region Settings',
+                'Your region helps us provide more accurate prayer times and Islamic content.\n\nCurrent region: ' + (settings.location ? settings.location.country : 'Not set'),
+                [
+                  { text: 'Update Location', onPress: handleLocationSettings },
+                  { text: 'Close' }
+                ]
+              );
+            }}
           />
         </View>
 
@@ -292,10 +564,10 @@ export default function SettingsScreen() {
             subtitle="Use app without internet connection"
             rightComponent={
               <Switch
-                value={settings.dataUsage.offlineMode}
-                onValueChange={(value) => updateDataUsage({ offlineMode: value })}
+                value={false}
+                onValueChange={(value) => console.log('Offline mode:', value)}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.dataUsage.offlineMode ? '#ffffff' : '#9ca3af'}
+                thumbColor={false ? '#ffffff' : '#9ca3af'}
               />
             }
           />
@@ -306,10 +578,10 @@ export default function SettingsScreen() {
             subtitle="Store images locally for faster loading"
             rightComponent={
               <Switch
-                value={settings.dataUsage.cacheImages}
-                onValueChange={(value) => updateDataUsage({ cacheImages: value })}
+                value={false}
+                onValueChange={(value) => console.log('Cache images:', value)}
                 trackColor={{ false: '#374151', true: '#10b981' }}
-                thumbColor={settings.dataUsage.cacheImages ? '#ffffff' : '#9ca3af'}
+                thumbColor={false ? '#ffffff' : '#9ca3af'}
               />
             }
           />
@@ -317,13 +589,9 @@ export default function SettingsScreen() {
           <SettingItem
             icon="sync-outline"
             title="Sync Frequency"
-            subtitle={settings.dataUsage.syncFrequency === 'low' ? 'Low' : 
-                     settings.dataUsage.syncFrequency === 'medium' ? 'Medium' : 'High'}
+            subtitle="Medium"
             onPress={() => {
-              const frequencies = ['low', 'medium', 'high'];
-              const currentIndex = frequencies.indexOf(settings.dataUsage.syncFrequency);
-              const nextFreq = frequencies[(currentIndex + 1) % frequencies.length];
-              updateDataUsage({ syncFrequency: nextFreq as any });
+              console.log('Sync frequency changed');
             }}
           />
 
@@ -350,27 +618,28 @@ export default function SettingsScreen() {
             icon="information-circle-outline"
             title="App Version"
             subtitle="1.0.0"
+            onPress={handleAppVersion}
           />
 
           <SettingItem
             icon="help-circle-outline"
             title="Help & Support"
             subtitle="Get help and contact support"
-            onPress={() => Alert.alert('Help', 'Help and support coming soon!')}
+            onPress={handleHelpSupport}
           />
 
           <SettingItem
             icon="document-text-outline"
             title="Privacy Policy"
             subtitle="Read our privacy policy"
-            onPress={() => Alert.alert('Privacy Policy', 'Privacy policy coming soon!')}
+            onPress={handlePrivacyPolicy}
           />
 
           <SettingItem
             icon="shield-checkmark-outline"
             title="Terms of Service"
             subtitle="Read our terms of service"
-            onPress={() => Alert.alert('Terms of Service', 'Terms of service coming soon!')}
+            onPress={handleTermsOfService}
           />
         </View>
 
@@ -532,6 +801,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
 });

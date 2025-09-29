@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -14,7 +15,6 @@ import {
   View
 } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import HomeScreenCards from '../../components/HomeScreenCards';
 import SimpleSwipeWrapper from '../../components/SimpleSwipeWrapper';
 import { BorderRadius, FontSizes, Spacing } from '../../constants/Theme';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,12 +32,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [nextPrayer, setNextPrayer] = useState<{name: string, time: string, timeLeft: string} | null>(null);
-  const [userStats, setUserStats] = useState({
-    prayersToday: 0,
-    streak: 0,
-    duasRead: 0,
-    progress: 0
-  });
+  const [completedPrayers, setCompletedPrayers] = useState<string[]>([]);
+  const [completedActivities, setCompletedActivities] = useState<string[]>([]);
 
   // Animation values
   const fadeAnim = useSharedValue(0);
@@ -55,7 +51,7 @@ export default function HomeScreen() {
     slideAnim.value = withSpring(0, { damping: 20, stiffness: 100 });
 
     initializeLocation();
-    loadUserStats();
+    loadInitialData();
     
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -72,6 +68,7 @@ export default function HomeScreen() {
       updatePrayerTimes();
     }
   }, [location]);
+
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
@@ -156,21 +153,10 @@ export default function HomeScreen() {
     }
   };
 
-  const loadUserStats = async () => {
-    // Load from AsyncStorage or API
-    // For now, using mock data but this would be real user data
-    setUserStats({
-      prayersToday: 3,
-      streak: 12,
-      duasRead: 24,
-      progress: 85
-    });
-  };
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await updatePrayerTimes();
-    await loadUserStats();
     setRefreshing(false);
   }, [location]);
 
@@ -186,20 +172,93 @@ export default function HomeScreen() {
     router.push(`/(tabs)/${route}` as any);
   };
 
-  // Quick stats data - now using real user data
-  const quickStats = [
-    { label: 'Prayers Today', value: userStats.prayersToday.toString(), icon: 'time' as any, color: '#8b5cf6' },
-    { label: 'Streak', value: `${userStats.streak} days`, icon: 'flame' as any, color: '#f59e0b' },
-    { label: 'Duas Read', value: userStats.duasRead.toString(), icon: 'book' as any, color: '#10b981' },
-    { label: 'Progress', value: `${userStats.progress}%`, icon: 'trending-up' as any, color: '#06b6d4' },
-  ];
+  const markPrayerCompleted = (prayerName: string) => {
+    setCompletedPrayers(prev => {
+      if (prev.includes(prayerName)) {
+        return prev.filter(p => p !== prayerName);
+      } else {
+        return [...prev, prayerName];
+      }
+    });
+  };
 
-  // Recent activities
-  const recentActivities = [
-    { title: 'Fajr Prayer', time: '5:30 AM', status: 'Completed', icon: 'checkmark-circle' as any, color: '#10b981' },
-    { title: 'Dua Reading', time: '6:15 AM', status: 'Completed', icon: 'book' as any, color: '#f59e0b' },
-    { title: 'Quran Study', time: '7:00 AM', status: 'In Progress', icon: 'library' as any, color: '#8b5cf6' },
-  ];
+  // Function to mark prayer as completed from anywhere in the app
+  const markPrayerAsCompleted = (prayerName: string) => {
+    if (!completedPrayers.includes(prayerName)) {
+      setCompletedPrayers(prev => [...prev, prayerName]);
+    }
+  };
+
+  const markActivityCompleted = (activityName: string) => {
+    setCompletedActivities(prev => {
+      if (prev.includes(activityName)) {
+        return prev.filter(a => a !== activityName);
+      } else {
+        return [...prev, activityName];
+      }
+    });
+  };
+
+  const loadInitialData = () => {
+    // Load from AsyncStorage or set default values
+    // For now, we'll start with empty arrays (no completed activities)
+    setCompletedPrayers([]);
+    setCompletedActivities([]);
+  };
+
+
+  // Recent activities - now dynamic and includes all prayers
+  const recentActivities = useMemo(() => {
+    const activities = [];
+    
+    // Add all 5 daily prayers if prayer times are available
+    if (prayerTimesData) {
+      const prayers = [
+        { name: 'Fajr', time: prayerTimesData.fajr, icon: 'sunny' },
+        { name: 'Dhuhr', time: prayerTimesData.dhuhr, icon: 'sunny' },
+        { name: 'Asr', time: prayerTimesData.asr, icon: 'partly-sunny' },
+        { name: 'Maghrib', time: prayerTimesData.maghrib, icon: 'moon' },
+        { name: 'Isha', time: prayerTimesData.isha, icon: 'moon' },
+      ];
+      
+      prayers.forEach(prayer => {
+        activities.push({
+          title: `${prayer.name} Prayer`,
+          time: prayer.time,
+          status: completedPrayers.includes(prayer.name) ? 'Completed' : 'Pending',
+          icon: completedPrayers.includes(prayer.name) ? 'checkmark-circle' : prayer.icon as any,
+          color: completedPrayers.includes(prayer.name) ? '#10b981' : '#6b7280',
+          onPress: () => markPrayerCompleted(prayer.name)
+        });
+      });
+    }
+    
+    // Add other activities
+    const otherActivities = [
+      { 
+        title: 'Dua Reading', 
+        time: '6:15 AM', 
+        status: completedActivities.includes('Dua Reading') ? 'Completed' : 'Pending', 
+        icon: completedActivities.includes('Dua Reading') ? 'checkmark-circle' : 'book' as any, 
+        color: completedActivities.includes('Dua Reading') ? '#f59e0b' : '#6b7280',
+        onPress: () => markActivityCompleted('Dua Reading')
+      },
+      { 
+        title: 'Quran Study', 
+        time: '7:00 AM', 
+        status: completedActivities.includes('Quran Study') ? 'Completed' : 'Pending', 
+        icon: completedActivities.includes('Quran Study') ? 'checkmark-circle' : 'library' as any, 
+        color: completedActivities.includes('Quran Study') ? '#8b5cf6' : '#6b7280',
+        onPress: () => markActivityCompleted('Quran Study')
+      },
+    ];
+    
+    activities.push(...otherActivities);
+    
+    // Return only the most recent 5 activities
+    return activities.slice(0, 5);
+  }, [prayerTimesData, completedPrayers, completedActivities]);
+  
 
   return (
     <View style={styles.container}>
@@ -280,43 +339,7 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Prayer Times Quick View */}
-          {prayerTimesData && (
-            <Animated.View style={[styles.prayerTimesContainer, animatedStyle]}>
-              <Text style={styles.sectionTitle}>Today's Prayer Times</Text>
-              <View style={styles.prayerTimesGrid}>
-                {[
-                  { name: 'Fajr', time: prayerTimesData.fajr, icon: 'sunny' },
-                  { name: 'Dhuhr', time: prayerTimesData.dhuhr, icon: 'sunny' },
-                  { name: 'Asr', time: prayerTimesData.asr, icon: 'partly-sunny' },
-                  { name: 'Maghrib', time: prayerTimesData.maghrib, icon: 'moon' },
-                  { name: 'Isha', time: prayerTimesData.isha, icon: 'moon' },
-                ].map((prayer, index) => (
-                  <TouchableOpacity key={index} style={styles.prayerTimeItem}>
-                    <Ionicons name={prayer.icon as any} size={20} color="#10b981" />
-                    <Text style={styles.prayerTimeName}>{prayer.name}</Text>
-                    <Text style={styles.prayerTimeValue}>{prayer.time}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Animated.View>
-          )}
 
-          {/* Quick Stats */}
-          <View style={styles.statsContainer}>
-            <Text style={styles.sectionTitle}>Today's Progress</Text>
-            <View style={styles.statsGrid}>
-              {quickStats.map((stat, index) => (
-                <View key={index} style={styles.statCard}>
-                  <View style={[styles.statIcon, { backgroundColor: stat.color }]}>
-                    <Ionicons name={stat.icon} size={20} color="white" />
-                  </View>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
 
           {/* Quick Actions */}
           <Animated.View style={[styles.quickActionsContainer, animatedStyle]}>
@@ -353,6 +376,22 @@ export default function HomeScreen() {
                 <Ionicons name="help-circle" size={24} color="#ec4899" />
                 <Text style={styles.quickActionText}>Quiz</Text>
               </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/progress')}
+              >
+                <Ionicons name="trending-up" size={24} color="#8b5cf6" />
+                <Text style={styles.quickActionText}>Progress</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(tabs)/mistakes')}
+              >
+                <Ionicons name="warning" size={24} color="#ef4444" />
+                <Text style={styles.quickActionText}>Mistakes</Text>
+              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -380,11 +419,6 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {/* Features Cards */}
-          <View style={styles.featuresContainer}>
-            <Text style={styles.sectionTitle}>More Features</Text>
-            <HomeScreenCards onCardPress={handleCardPress} />
-          </View>
 
           {/* Recent Activities */}
           <View style={styles.activitiesContainer}>
@@ -397,7 +431,12 @@ export default function HomeScreen() {
             </View>
             <View style={styles.activitiesList}>
               {recentActivities.map((activity, index) => (
-                <View key={index} style={styles.activityItem}>
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.activityItem}
+                  onPress={activity.onPress}
+                  activeOpacity={0.7}
+                >
                   <View style={[styles.activityIcon, { backgroundColor: activity.color }]}>
                     <Ionicons name={activity.icon} size={18} color="white" />
                   </View>
@@ -407,11 +446,11 @@ export default function HomeScreen() {
                   </View>
                   <View style={[
                     styles.activityStatus, 
-                    { backgroundColor: activity.status === 'Completed' ? '#10b981' : '#f59e0b' }
+                    { backgroundColor: activity.status === 'Completed' ? '#10b981' : '#6b7280' }
                   ]}>
                     <Text style={styles.activityStatusText}>{activity.status}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -535,46 +574,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
   },
-  // Stats Section
-  statsContainer: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statCard: {
-    width: (width - Spacing.lg * 2 - 12) / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 12,
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
   // Activities Section
   activitiesContainer: {
     paddingHorizontal: Spacing.lg,
@@ -644,7 +643,7 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   bottomSpacing: {
-    height: Spacing.xxl,
+    height: Platform.OS === 'ios' ? 120 : 100, // Account for tab bar height
   },
   // Next Prayer Section
   nextPrayerContainer: {
@@ -686,38 +685,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: '#94a3b8',
   },
-  // Prayer Times Section
-  prayerTimesContainer: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  prayerTimesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  prayerTimeItem: {
-    width: (width - Spacing.lg * 2 - 8) / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 8,
-  },
-  prayerTimeName: {
-    fontSize: FontSizes.sm,
-    color: '#94a3b8',
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  prayerTimeValue: {
-    fontSize: FontSizes.md,
-    color: 'white',
-    fontWeight: '600',
-  },
   // Quick Actions Section
   quickActionsContainer: {
     paddingHorizontal: Spacing.lg,
@@ -727,17 +694,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
   quickActionButton: {
-    width: (width - Spacing.lg * 2 - 12) / 2,
+    width: (width - Spacing.lg * 2 - 16) / 3,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   quickActionText: {
     fontSize: FontSizes.sm,
